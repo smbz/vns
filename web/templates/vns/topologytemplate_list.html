@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Topology templates{% endblock %}
+{% block title%}Topology templates{% endblock %}
+
+{% block content %}
+  {% if templates %}
+    <table>
+      <tr>
+        <th>Name</th>
+        <th>Organization</th>
+        <th>Owner</th>
+      </tr>
+      {% for t in templates %}
+        <tr>
+          <td>{{ t|templatelink }}</td>
+          <td>{{ t.org|orglink }}</td>
+          <td>{{ t.owner|unamelink }}</td>
+        </tr>
+    {% empty %}
+      <p>There are no topology templates that you can use.</p>
+    {% endfor %}
+    </table>
+  {% endif %}
+{% endblock %}

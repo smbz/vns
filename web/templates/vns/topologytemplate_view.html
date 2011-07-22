@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Template {{ t.name }}{% endblock %}
+{% block title %}Template {{ t.name }}{% endblock %}
+
+{% block content %}
+    <p style="margin-top:0">
+        <a href="/template{{ t.id }}/readme/">Template README</a>
+        <br/>
+        <a href="/template{{ t.id }}/rtable/">Template Routing Table</a>
+	<br/>
+	<a href="/template{{ t.id }}/spec/">Template Specification</a>
+    </p>
+
+    <table class="vert">
+      <tr>
+	<th>Name</th>
+	<td>{{ t.name }}</td>
+      </tr><tr>
+	<th>Owner</th>
+	<td>{{ t.owner|fnamelink }} ({{ t.owner.get_profile.org|orglink }})</td>
+      </tr><tr>
+	<th>Organization</th>
+	<td>{{ t.org|orglink }}</td>
+      </tr><tr>
+	<th>Visibility</th>
+	<td>{{ t.get_visibility_str }}</td>
+      </tr>
+    </table>
+
+{% endblock %}
