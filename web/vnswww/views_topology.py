@@ -4,20 +4,21 @@ import struct
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
 from django.views.generic.simple import direct_to_template
 from django.http import HttpResponse, HttpResponseRedirect
 from SubnetTree import SubnetTree
 
 import models as db
+import permissions
 from vns.AddressAllocation import instantiate_template
 from vns.Topology import Topology as VNSTopology
 
 def make_ctform(user):
     user_org = user.get_profile().org
     parent_org = user_org.parentOrg
-    template_choices = [(t.id, t.name) for t in db.TopologyTemplate.objects.filter(visibility=2)]
-    ipblock_choices = [(t.id, str(t)) for t in db.IPBlock.objects.filter(org=user_org)] + \
-                      [(t.id, str(t)) for t in db.IPBlock.objects.filter(org=parent_org, usable_by_child_orgs=True)]
+    template_choices = [(t.id, t.name) for t in permissions.get_allowed_templates(user)]
+    ipblock_choices = [(t.id, str(t)) for t in permissions.get_allowed_ipblocks(user)]
     class CTForm(forms.Form):
         template = forms.ChoiceField(label='Template', choices=template_choices)
         ipblock = forms.ChoiceField(label='IP Block to Allocate From', choices=ipblock_choices)
@@ -26,7 +27,8 @@ def make_ctform(user):
 
 def topology_create(request):
     # make sure the user is logged in
-    if not request.user.is_authenticated():
+    if not request.user.has_perm("vnswww.add_topology"):
+        messages.info("Please login as a user who is permitted to create topologies.")
         return HttpResponseRedirect('/login/?next=/topology/create/')
 
     tn = 'vns/topology_create.html'
@@ -46,7 +48,13 @@ def topology_create(request):
             try:
                 ipblock = db.IPBlock.objects.get(pk=ipblock_id)
             except db.IPBlock.DoesNotExist:
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'invalid IP block' })
+                return direct_to_template(request, tn, { 'form': form, 'more_error': 'invalid IP block'})
+
+            if not permissions.allowed_topologytemplate_access_use(request.user, template):
+                return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create topologies from this template' })
+            
+            if not permissions.allowed_ipblock_access_use(request.user, ipblock):
+                return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create topologies in this IP block' })
 
             if num_to_create > 30:
                 return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create >30 topologies at once' })
@@ -57,7 +65,11 @@ def topology_create(request):
             # try to create the topologies
             src_filters = []
             for i in range(num_to_create):
-                err, _, _, _ = instantiate_template(request.user, template, ipblock, src_filters,
+                err, _, _, _ = instantiate_template(request.user.get_profile().org,
+                                                    request.user,
+                                                    template,
+                                                    ipblock,
+                                                    src_filters,
                                                     temporary=False,
                                                     use_recent_alloc_logic=False,
                                                     public=False,
@@ -72,52 +84,84 @@ def topology_create(request):
 
     return direct_to_template(request, tn, { 'form': form })
 
-def topology_access_check(request, callee, login_req, owner_req, pu_req,
-                          var_tid='tid', **kwargs):
-    """This wrapper function checks to make sure that a topology exists.  It
-    also verifies the user is logged in, is the owner, or is a permitted user
-    as dictated by the boolean arguments *_req.  If these tests pass, callee is
-    called with (request, tid, topo)."""
-    tid = int(kwargs[var_tid])
-    try:
-        topo = db.Topology.objects.get(pk=tid)
-    except db.Topology.DoesNotExist:
-        messages.error(request, 'Topology %d does not exist.' % tid)
-        return HttpResponseRedirect('/topologies/')
+def topology_access_check(request, callee, action, **kwargs):
+    """Checks that the user can access the functions they're trying to, and
+    if they can calls callee"""
+    """Check that the user is allowed access, and if they are call the given
+    Callable.
+    @param request  An HTTP request
+    @param callee  Gives the Callable to call
+    @param action  One of "add", "change", "use", "delete", describing the
+    permissions needed
+    @param tid  The ID of the topology in question; not used for
+    action = "add"
+    @exception ValueError  If an action is unrecognised
+    @exception KeyError  If an option is missing"""
 
-    # make sure the user is logged in if required
-    if login_req and not request.user.is_authenticated():
-        messages.warning(request, 'You must login before proceeding.')
-        return HttpResponseRedirect('/login/?next=%s' % request.path)
+    def denied():
+        """Generate an error message and redirect if we try do something to a
+        topology we're not allowed to"""
+        messages.error(request, "Either this topology doesn't exist or you don't "
+                                "have permission to %s it." % action)
+        return HttpResponseRedirect('/')
 
-    # make sure the user is the owner if required
-    if owner_req and request.user != topo.owner:
-        msg = 'Only the owner (%s) can do this.' % topo.owner.username
-        if request.user.is_superuser:
-            messages.info(request, msg + "  However, so you can because you're a superuser.")
+    def denied_add():
+        """Generate an error message and redirect if we try to create a topology
+        and are not allowed to"""
+        messages.error(request, "You don't have permission to create topologies.")
+        return HttpResponseRedirect('/')
+    
+    # If we're trying to add a template, don't need to get the template itself
+    if action == "add":
+        if permissions.allowed_topology_access_create(request.user):
+            return callee(request)
         else:
-            messages.error(request, msg)
-            return HttpResponseRedirect('/topology%d/' % tid)
+            return denied_add()
 
-    # make sure the user is a permitted user if required
-    if (not owner_req and pu_req) and request.user != topo.owner:
-        try:
-            db.TopologyUserFilter.objects.get(topology=topo, user=request.user)
-        except db.TopologyUserFilter.DoesNotExist:
-            messages.error(request, 'Only the owner (%s) or permitted users can do this.' % topo.owner.username)
-            return HttpResponseRedirect('/topology%d/' % tid)
+    else:
 
-    kwargs['request'] = request
-    kwargs['tid'] = tid
-    kwargs['topo'] = topo
-    return callee(**kwargs)
+        # Try getting the template - if it doesn't exist, show the same message
+        # as for permission denied.  If we don't have a "tid" argument, django
+        # will show an internal error, which is what we want.
+        tid = int(kwargs["tid"])
+        kwargs["tid"] = tid
+        try :
+            topo = db.Topology.objects.get(pk=tid)
+        except db.Topology.DoesNotExist:
+            return denied()
+
+        if action == "use":
+            if permissions.allowed_topology_access_use(request.user, topo):
+                return callee(request, topo=topo, **kwargs)
+            else:
+                return denied()
+        elif action == "change":
+            if permissions.allowed_topology_access_change(request.user, topo):
+                return callee(request, topo=topo, **kwargs)
+            else:
+                return denied()
+        elif action == "delete":
+            if permissions.allowed_topology_access_delete(request.user, topo):
+                return callee(request, topo=topo, **kwargs)
+            else:
+                return denied()
+        else:
+            raise ValueError("Unknown action: %s" % options["action"])
+
+    
 
 def topology_info(request, tid, topo):
     return direct_to_template(request, 'vns/topology.html', {'t':topo, 'tid':tid})
 
 @login_required
 def topologies_list(request):
-    topos = db.Topology.objects.filter(enabled=True).order_by('owner__userprofile__org__name', 'owner__username', 'template__name', 'id')
+
+    # Get a QuerySet of the topologies we have access to
+    topos = permissions.get_allowed_topologies(request.user)
+
+    # Order the topologies by organization
+    topos = topos.order_by('owner__userprofile__org__name', 'owner__username', 'template__name', 'id')
+
     orgs = {}
     # count the number of times each org/owner/template appears
     for t in topos:
@@ -155,10 +199,11 @@ def topologies_list(request):
     
     return direct_to_template(request, 'vns/topologies.html', {'topos_list':topos})
 
+
 def make_apu_form(user, topo):
     user_org = user.get_profile().org
-    existing_tuf_users = [tuf.user for tuf in db.TopologyUserFilter.objects.filter(topology=topo)]
-    user_choices = [(up.user.username,up.user.username) for up in db.UserProfile.objects.filter(org=user_org, retired=False).exclude(user=user).exclude(user__in=existing_tuf_users)]
+    existing_allowed_users = topo.allowed_users.all()
+    user_choices = [(up.user.username,up.user.username) for up in db.UserProfile.objects.filter(org=user_org, retired=False).exclude(user=user).exclude(user__in=existing_allowed_users)]
 
     class APUForm(forms.Form):
         usr = forms.ChoiceField(label='User', choices=user_choices)
@@ -181,22 +226,15 @@ def topology_permitted_user_add(request, tid, topo):
                 messages.error(request, 'This topology is already owned by %s.' % username)
                 return HttpResponseRedirect('/topology%d/' % tid)
 
-            tuf = db.TopologyUserFilter()
-            tuf.topology = topo
-            tuf.user = user
-            tuf.save()
-            messages.success(request, "%s (%s) has been added to the permitted users list." % (username, user.get_full_name()))
-            return HttpResponseRedirect('/topology%d/' % tid)
+            topo.allowed_users.add(user)
     else:
         form = APUForm()
     return direct_to_template(request, tn, {'form':form, 'tid':tid })
 
 def topology_permitted_user_remove(request, tid, topo, un):
-    try:
-        db.TopologyUserFilter.objects.get(topology=topo, user__username=un).delete()
-        messages.success(request, "%s is no longer a permitted user on this topology." % un)
-    except db.TopologyUserFilter.DoesNotExist:
-        messages.error(request, "%s isn't a permitted user on this topology anyway." % un)
+    user = User.objects.get(username=un)
+    topo.allowed_users.remove(user)
+    messages.success(request, "Successfully removed %s from the permitted users for topology %d." % (un, tid))
     return HttpResponseRedirect('/topology%d/' % tid)
 
 class APSIPForm(forms.Form):

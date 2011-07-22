@@ -7,6 +7,8 @@ from socket import inet_aton, inet_ntoa
 import struct
 import time
 
+from django.contrib.auth.models import User
+
 from settings import ARP_CACHE_TIMEOUT, MAY_FORWARD_TO_PRIVATE_IPS, WEB_SERVER_ROOT_WWW
 from DRRQueue import DRRQueue
 from HTTPServer import HTTPServer
@@ -17,6 +19,7 @@ from TCPStack import TCPServer
 from TopologyInteractionProtocol import TIPacket, TIBadNodeOrPort
 from VNSProtocol import VNSPacket, VNSInterface, VNSHardwareInfo
 import web.vnswww.models as db
+from web.vnswww import permissions
 
 MAX_JOBS_PER_TOPO = 25
 
@@ -59,27 +62,18 @@ class Topology():
         # current ARP translation
         self.arp_translation = None
 
-        t = db.Topology.objects.get(pk=tid)
-        if not t.enabled:
+        self.t = db.Topology.objects.get(pk=tid)
+        if not self.t.enabled:
             raise TopologyCreationException('topology %d is disabled' % tid)
         self.id = tid
-        self.temporary = t.temporary
+        self.temporary = self.t.temporary
 
         # determine what IP block is allocated to this topology
-        ipba = db.IPBlockAllocation.objects.get(topology=t)
+        ipba = db.IPBlockAllocation.objects.get(topology=self.t)
         self.ip_block = (struct.unpack('>I',inet_aton(ipba.start_addr))[0], ipba.mask)
 
-        # determine who may connect to nodes in this topology
-        if t.public:
-            # anyone may use it
-            self.permitted_clients = None
-        else:
-            tufs = db.TopologyUserFilter.objects.filter(topology=t)
-            self.permitted_clients = [tuf.user for tuf in tufs]
-            self.permitted_clients.append(t.owner)
-
         # determine what IPs may interact with this topology
-        tus = db.TopologySourceIPFilter.objects.filter(topology=t)
+        tus = db.TopologySourceIPFilter.objects.filter(topology=self.t)
         if len(tus) > 0:
             self.permitted_source_prefixes = [tu.subnet_mask_str() for tu in tus]
         else:
@@ -91,7 +85,7 @@ class Topology():
         self.mac_salt = ''.join([hashlib.md5(psp).digest() for psp in self.permitted_source_prefixes])
 
         # read in this topology's nodes
-        db_nodes = db.Node.objects.filter(template=t.template)
+        db_nodes = db.Node.objects.filter(template=self.t.template)
         self.gateway = None
         self.nodes = [self.__make_node(dn, raw_socket) for dn in db_nodes]
 
@@ -104,16 +98,16 @@ class Topology():
 
         # read in this topology's ports
         interfaces_db_to_sim = {}
-        db_ports = db.Port.objects.filter(node__template=t.template)
+        db_ports = db.Port.objects.filter(node__template=self.t.template)
         for dp in db_ports:
             sn = nodes_db_to_sim[dp.node]
             # TODO: we're hitting the DB a lot here; could optimize a bit
-            mac, ip, mask = self.__get_addr_assignments_for_node(t, sn, dp)
+            mac, ip, mask = self.__get_addr_assignments_for_node(self.t, sn, dp)
             intf = sn.add_interface(dp.name, mac, ip, mask)
             interfaces_db_to_sim[dp] = intf
 
         # read in this topology's links
-        links = db.Link.objects.filter(port1__node__template=t.template)
+        links = db.Link.objects.filter(port1__node__template=self.t.template)
         for db_link in links:
             intf1 = interfaces_db_to_sim[db_link.port1]
             intf2 = interfaces_db_to_sim[db_link.port2]
@@ -128,7 +122,7 @@ class Topology():
 
         if start_stats:
             self.stats = db.UsageStats()
-            self.stats.init(t, client_ip, user)
+            self.stats.init(self.t, client_ip, user)
             self.stats.save()
             logging.info('Topology instantiated:\n%s' % self.str_all(include_clients=False))
 
@@ -151,9 +145,8 @@ class Topology():
         """Called when a user tries to connect to a node in this topology.
         Returns True if the requested node exists and the client was able to
         connect to it.  Otherwise it returns an error message."""
-        if self.permitted_clients is not None: # otherwise anyone can use it
-            if client_user not in self.permitted_clients:
-                return ConnectionReturn('%s is not authorized to use this topology' % client_user)
+        if not self.can_connect(client_user):
+            return ConnectionReturn('%s is not authorized to use this topology' % client_user)
 
         for n in self.nodes:
             if n.name == requested_name:
@@ -450,6 +443,15 @@ class Topology():
         str_psp = 'Source IP Prefixes: %s' % ','.join(self.permitted_source_prefixes)
         str_nodes = 'Nodes:\n    ' + '\n    '.join([n.str_all() for n in self.nodes])
         return '%s:\n  %s%s\n  %s' % (str_hdr, str_clients, str_psp, str_nodes)
+
+    def can_connect(self, username):
+        """Returns True if the user with this username can connect to the
+        topology, False otherwise."""
+        try:
+            user = User.objects.get(username=username)
+        except User.DoesNotExist:
+            return False
+        return permissions.allowed_topology_access_use(user, self.t)
 
 class TapConfig(object):
     def __init__(self, ti_conn, consume=False, ip_only=False):

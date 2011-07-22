@@ -2,6 +2,8 @@ from django import template
 from django.utils.safestring import mark_safe
 register = template.Library()
 
+from vns.web.vnswww import permissions
+
 @register.filter(name='durationf')
 def durationf(num_secs):
     """Returns a string represented the time this topology has been connected."""
@@ -43,3 +45,7 @@ def unamelink(user):
 @register.filter(name='topolink')
 def topolink(topo):
     return mark_safe('<a href="/topology%d/">Topology %d</a>' % (topo.id, topo.id))
+
+@register.filter(name='templatelink')
+def templatelink(template):
+    return mark_safe('<a href="/template%d/">%s</a>' % (template.id, template.name))

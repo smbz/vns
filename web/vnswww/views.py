@@ -1,6 +1,7 @@
 from django.http import HttpResponseRedirect
 from django.views.generic.simple import direct_to_template
 
+
 def checked_delete(request, delete_hook, kind, what, **kwargs):
     if request.method == 'POST':
         return delete_hook(request, **kwargs)

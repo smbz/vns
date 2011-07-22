@@ -24,7 +24,7 @@ def free_topology(tid):
     except db.Topology.DoesNotExist:
         logging.warning('asked to free non-existent topology %d' % tid)
 
-def instantiate_template(owner, template, ip_block_from, src_filters, temporary,
+def instantiate_template(org, owner, template, ip_block_from, src_filters, temporary,
                          use_recent_alloc_logic=True, public=False,
                          use_first_available=False):
     """Instantiates a new Topology object, allocates a block of addresses for
@@ -70,6 +70,7 @@ def instantiate_template(owner, template, ip_block_from, src_filters, temporary,
             assignments.append((link.port2, start_addr+2*i+1, 31))
 
     t = db.Topology()
+    t.org = org
     t.owner = owner
     t.template = template
     t.enabled = True

@@ -27,6 +27,9 @@
               <tr>
                  <td><a href="/topologies/">Topologies</a></td>
               </tr>
+	      <tr>
+		 <td><a href="/templates/">Templates</a></td>
+	      </tr>
               {% if user.is_authenticated %}
               <tr>
                  <td><a href="/user/{{ user.username }}/">Your Profile</a></td>
@@ -34,21 +37,31 @@
               <tr>
                  <td><a href="/logout/">Logoff</a></td>
               </tr>
-              {% if user.get_profile.is_staff %}
+	      {% else %}
+	      <tr>
+		  <td><a href="/login/">Logon</a></td>
+	      </tr>
+	      {% endif %}
+	      {% if user.get_profile.can_create_topology or user.get_profile.can_create_user or user.get_profile.can_create_topologytemplate %}
               <tr>
-                  <td>&nbsp;<br/><h2>Staff Actions</h2></td>
+                  <td>&nbsp;<br/><h2>Actions</h2></td>
               </tr>
+	      {% endif %}
+              {% if user.get_profile.can_create_topology %}
               <tr>
                   <td><a href="/topology/create/">Create Topology</a></td>
               </tr>
+	      {% endif %}
+	      {% if user.get_profile.can_create_user %}
+	      <tr>
                   <td><a href="/user/create/">Create User</a></td>
               </tr>
               {% endif %}
-              {% else %}
-              <tr>
-                 <td><a href="/login/">User Login</a></td>
-              </tr>
-              {% endif %}
+	      {% if user.get_profile.can_create_topologytemplate %}
+	      <tr>
+		  <td><a href="/template/create/">Create Template</a></td>
+	      </tr>
+	      {% endif %}
             </tbody></table>
         </div>
 
@@ -61,7 +74,7 @@
                 {% if messages %}
                     <div id="messages">
                         {% for message in messages %}
-                        <div {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</div>
+                        <div {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|safe }}</div>
                         {% endfor %}
                     </ul>
                 {% endif %}
@@ -75,8 +88,16 @@
                 </a>
 
                 <a href="http://www.stanford.edu/">
-                    <img height="59" width="149" style="border: medium none ;" alt="Stanford University" src="http://yuba.stanford.edu/cs344/images/su.gif"/>
+                    <img height="55" width="149" style="border: medium none ;" alt="Stanford University" src="http://yuba.stanford.edu/cs344/images/su.gif"/>
                 </a>
+
+		<a href="http://www.cl.cam.ac.uk/">
+                    <img height="40" style="border: medium none;" alt="University of Cambridge" src="http://www.cl.cam.ac.uk/images/identifier.gif"/>
+		</a>
+
+		<a href="http://www.red-gate.com/">
+		    <img height="40" style="border: medium none;" alt="Support by redgate" src="http://www.red-gate.com/assets/images/common/logo.png"/>
+		</a>
             </p>
         </div>
     </div>

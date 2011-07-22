@@ -5,6 +5,9 @@
 {% block title %}{{ up.user.username }}{% endblock %}
 
 {% block content %}
+    {% if up.user.retired %}
+        <h2>{{ up.user.username }} has been retired</h2>
+    {% endif %}
     <table class="vert">
         <tr>
             <th>Name</th>
@@ -28,19 +31,19 @@
         </tr><tr>
             <th>Topologies Owned</th>
             <td>
-                {% for t in up.get_owned_topologies %}
+                {% for t in topos_owned %}
                     {{ t|topolink }} ({{ t.template.name }})<br/>
                 {% empty %}
-                    None
+                    None visible to you
                 {% endfor %}
             </td>
         </tr><tr>
             <th>Topologies Assigned To</th>
             <td>
-                {% for t in up.get_usable_topologies %}
+                {% for t in topos_assigned %}
                     {{ t|topolink }} ({{ t.template.name }})<br/>
                 {% empty %}
-                    None
+                    None visible to you
                 {% endfor %}
             </td>
         </tr>
@@ -48,10 +51,13 @@
 
     {% if user.is_authenticated %}
         {% if user == up.user %}
-            <p><a href="/user/{{ up.user.username }}/change_password/">Change Your Password</a></p>
+            <p><a href="/user/{{ up.user.username }}/change_password/">Change your password</a></p>
+            <p><a href="/user/{{ up.user.username }}/renew_auth_key/">Renew your auth key</a></p>
         {% else %}
-            {% if user.get_profile.is_staff or user.is_superuser %}
-                <p><b>Staff Action</b>: <a href="/user/{{ up.user.username }}/change_password/">Change {{ up.user.get_full_name }}'s Password</a></p>
+            {% if can_change %}
+                <p><b>Staff Actions:</b></p>
+		<p><a href="/user/{{ up.user.username }}/change_password/">Change {{ up.user.get_full_name }}'s password</a></p>
+		<p><a href="/user/{{ up.user.username }}/renew_auth_key/">Renew {{ up.user.get_full_name }}'s auth key</a></p>
             {% endif %}
         {% endif %}
     {% endif %}

@@ -1,9 +1,9 @@
 from django.contrib import admin
 from models import Simulator, Organization, UserProfile, UsageStats, \
                    TopologyTemplate, Node, WebServer, WebServerPath, Port, Link, \
-                   Topology, TopologySourceIPFilter, TopologyUserFilter, \
+                   Topology, TopologySourceIPFilter, \
                    IPAssignment, MACAssignment, IPBlock, IPBlockAllocation, \
-                   RecentIPBlockAllocation, SystemInfo
+                   RecentIPBlockAllocation, SystemInfo, Doc
 
 def make_user_search_fields(prefix):
     return (prefix + '__username', prefix + '__first_name', prefix + '__last_name')
@@ -65,10 +65,10 @@ class TopologySourceIPFilterAdmin(admin.ModelAdmin):
     ordering = ('ip',)
     search_fields = ('ip', 'topology__template__name', 'topology__name')
 
-class TopologyUserFilterAdmin(admin.ModelAdmin):
-    list_display = ('topology', 'user')
-    ordering = ('topology',)
-    search_fields = ('user__username', 'topology__template__name', 'topology__name')
+#class TopologyUserFilterAdmin(admin.ModelAdmin):
+#    list_display = ('topology', 'user')
+#    ordering = ('topology',)
+#    search_fields = ('user__username', 'topology__template__name', 'topology__name')
 
 class IPAssignmentAdmin(admin.ModelAdmin):
     list_display = ('topology', 'port', 'ip', 'mask')
@@ -105,6 +105,11 @@ class SystemInfoAdmin(admin.ModelAdmin):
     ordering = ('name',)
     search_fields = ('name', 'value')
 
+class DocAdmin(admin.ModelAdmin):
+    list_display = ('name', 'text')
+    ordering = ('name',)
+    search_fields = ('name', 'text')
+
 admin.site.register(Simulator, SimulatorAdmin)
 admin.site.register(Organization, OrganizationAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
@@ -116,7 +121,7 @@ admin.site.register(Port, PortAdmin)
 admin.site.register(Link, LinkAdmin)
 admin.site.register(Topology, TopologyAdmin)
 admin.site.register(TopologySourceIPFilter, TopologySourceIPFilterAdmin)
-admin.site.register(TopologyUserFilter, TopologyUserFilterAdmin)
+#admin.site.register(TopologyUserFilter, TopologyUserFilterAdmin)
 admin.site.register(IPAssignment, IPAssignmentAdmin)
 admin.site.register(MACAssignment, MACAssignmentAdmin)
 admin.site.register(IPBlock, IPBlockAdmin)
@@ -124,3 +129,4 @@ admin.site.register(IPBlockAllocation, IPBlockAllocationAdmin)
 admin.site.register(RecentIPBlockAllocation, RecentIPBlockAllocationAdmin)
 admin.site.register(UsageStats, UsageStatsAdmin)
 admin.site.register(SystemInfo, SystemInfoAdmin)
+admin.site.register(Doc, DocAdmin)

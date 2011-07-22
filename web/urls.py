@@ -5,9 +5,13 @@ from django.views.generic.simple import direct_to_template, redirect_to
 
 from vnswww import models as db
 from vnswww.views import checked_delete, homepage
-from vnswww.views_topology import *
-from vnswww.views_user import *
+from vnswww.views_doc import *
+from vnswww.views_org import *
+from vnswww.views_setup import setup, setup_doc
 from vnswww.views_stats import stats_search
+from vnswww.views_topology import *
+from vnswww.views_topologytemplate import *
+from vnswww.views_user import *
 
 admin.autodiscover()
 
@@ -23,71 +27,93 @@ organizations_info = {
     'template_object_name': 'orgs'
 }
 
+
+def access_check(call, user, permissions, args=None):
+    """Checks that a user has the necessary permissions and, if they do,
+    call call.
+    @param call  A Callable to call if the permission check succeeds.
+    @param user  The user who's trying to access the page
+    @param permissions  A list of permissions, any one of which grants access
+    @param args  Argument to pass to call"""
+    for p in permissions:
+        if user.has_perm(p):
+            call(args)
+            break
+
+def make_access_check_dict(callee, action):
+    return { 'callee':callee, 'action':action }
+
 # dictionaries which specify access requirements for various topology views
-def make_topology_access_check_dict(callee, owner_req=False, pu_req=False, login_req=True):
-    return { 'callee':callee, 'login_req':login_req, 'owner_req':owner_req, 'pu_req':pu_req }
-dict_topo_delete    = make_topology_access_check_dict(checked_delete, True)
-dict_topo_delete['delete_hook'] = topology_delete
-dict_topo_delete['kind'] = 'Topology'
-dict_topo_delete['var_tid'] = 'what'
-dict_topo_list      = make_topology_access_check_dict(topologies_list)
-dict_topo_info      = make_topology_access_check_dict(topology_info)
-dict_topo_pua       = make_topology_access_check_dict(topology_permitted_user_add, True)
-dict_topo_pur       = make_topology_access_check_dict(topology_permitted_user_remove, True)
-dict_topo_psipa     = make_topology_access_check_dict(topology_permitted_sip_add, True)
-dict_topo_psipr     = make_topology_access_check_dict(topology_permitted_sip_remove, True)
-dict_topo_readme    = make_topology_access_check_dict(topology_readme)
-dict_topo_rtable    = make_topology_access_check_dict(topology_rtable)
-dict_topo_xml       = make_topology_access_check_dict(topology_to_xml)
-dict_topo_xml_clack = make_topology_access_check_dict(topology_to_xml, login_req=False) # TODO: temporary so Clack can access the xml
+dict_topology_create    = make_access_check_dict(topology_create, "add")
+dict_topology_view      = make_access_check_dict(topology_info, "use")
+dict_topology_delete    = make_access_check_dict(topology_delete, "delete")
+dict_topology_sip_add   = make_access_check_dict(topology_permitted_sip_add, "change")
+dict_topology_sip_remove= make_access_check_dict(topology_permitted_sip_remove, "change")
+dict_topology_user_add  = make_access_check_dict(topology_permitted_user_add, "change")
+dict_topology_user_remove=make_access_check_dict(topology_permitted_user_remove, "change")
+dict_topology_readme    = make_access_check_dict(topology_readme, "use")
+dict_topology_rtable    = make_access_check_dict(topology_rtable, "use")
+dict_topology_to_xml    = make_access_check_dict(topology_to_xml, "use")
 
 # dictionaries which specify access requirements for various user/org views
-def make_user_access_check_dict(callee, requester_is_staff_req=False, requester_in_same_org_req=False, self_req=False, login_required=True):
-    return { 'callee':callee, 'requester_is_staff_req':requester_is_staff_req, 'requester_in_same_org_req':requester_in_same_org_req, 'self_req':self_req, 'login_required':login_required }
-dict_user_org       = make_user_access_check_dict(user_org, login_required=False)
-dict_user_create    = make_user_access_check_dict(user_create, True)
-dict_user_change_pw = make_user_access_check_dict(user_change_pw, self_req=True)
-dict_user_delete    = make_user_access_check_dict(checked_delete, True, True)
-dict_user_delete['delete_hook'] = user_delete
-dict_user_delete['kind'] = 'User'
-dict_user_delete['var_un'] = 'what'
-dict_user_delete['del_un'] = False
-dict_user_profile   = make_user_access_check_dict(user_profile)
+dict_user_create    = make_access_check_dict(user_create, "add")
+dict_user_change_pw = make_access_check_dict(user_change_pw, "change")
+dict_user_renew_auth= make_access_check_dict(user_renew_auth_key, "change")
+dict_user_delete    = make_access_check_dict(user_delete, "delete")
+dict_user_undelete  = make_access_check_dict(user_undelete, "delete")
+dict_user_profile   = make_access_check_dict(user_profile, "use")
+
+# dictionaries which specify access requirements for various topology template views
+dict_topologytemplate_view        = make_access_check_dict(topologytemplate_view, "use")
+dict_topologytemplate_spec        = make_access_check_dict(topologytemplate_spec, "use")
+dict_topologytemplate_readme      = make_access_check_dict(topologytemplate_readme, "use")
+dict_topologytemplate_rtable      = make_access_check_dict(topologytemplate_rtable, "use")
+dict_topologytemplate_create      = make_access_check_dict(topologytemplate_create, "add")
+dict_topologytemplate_delete      = make_access_check_dict(topologytemplate_spec, "delete")
+
+# dictionaries which specify access requirements for various topology template views
+dict_org_users      = make_access_check_dict(org_users, "use")
 
 def redirect_to_file(request, folder, file, ext):
     return redirect_to(request, folder + file + '.' + ext)
 
+# TODO: stats
 urlpatterns = patterns('web.vnswww.views',
-    (r'^admin/', include(admin.site.urls)),
+    (r'^admin/',                                        include(admin.site.urls)),
     (r'^$',                                             homepage),
     (r'^summary/?$',                                    list_detail.object_list, summary_info),
     (r'^vns[.]css$',                                    direct_to_template, {'mimetype':'text/css', 'template':'vns.css'}),
-
-    # topology URLs
-    (r'^topologies/?$',                                 topologies_list),
-    (r'^topology(?P<tid>\d+)/?$',                       topology_access_check, dict_topo_info),
-    (r'^topology/create/?$',                            topology_create),
-    (r'^topology(?P<tid>\d+)/allow_new_user/?$',        topology_access_check, dict_topo_pua),
-    (r'^topology(?P<tid>\d+)/disallow_user/(?P<un>\w+)/?$',    topology_access_check, dict_topo_pur),
-    (r'^topology(?P<tid>\d+)/allow_new_srcip/?$',              topology_access_check, dict_topo_psipa),
-    (r'^topology(?P<tid>\d+)/disallow_srcip/(?P<sn>[^/]+/\d+)/?$', topology_access_check, dict_topo_psipr),
-    (r'^topology(?P<what>\d+)/delete/?$',               topology_access_check, dict_topo_delete),
-    (r'^topology(?P<tid>\d+)/readme/?$',                topology_access_check, dict_topo_readme),
-    (r'^topology(?P<tid>\d+)/rtable/?$',                topology_access_check, dict_topo_rtable),
-    (r'^topology(?P<tid>\d+)/xml/?$',                   topology_access_check, dict_topo_xml),
-    (r'^topology=(?P<tid>\d+)$',                        topology_access_check, dict_topo_xml_clack), # old URL for Clack
-
-    # user / organization URLs
     (r'^organizations/?$',                              list_detail.object_list, organizations_info),
-    (r'^org/(?P<on>[^/]+)/?$',                          user_access_check, dict_user_org),
+    (r'^org/(?P<on>[^/]+)/?$',                          org_access_check, dict_org_users),
+    (r'^topologies/?$',                                 topologies_list),
+    (r'^topology/create/?$',                            topology_access_check, dict_topology_create),
+    (r'^topology(?P<tid>\d+)/?$',                       topology_access_check, dict_topology_view),
+    (r'^topology(?P<tid>\d+)/allow_new_user/?$',        topology_access_check, dict_topology_user_add),
+    (r'^topology(?P<tid>\d+)/disallow_user/(?P<un>\w+)/?$',    topology_access_check, dict_topology_user_remove),
+    (r'^topology(?P<tid>\d+)/allow_new_srcip/?$',              topology_access_check, dict_topology_sip_add),
+    (r'^topology(?P<tid>\d+)/disallow_srcip/(?P<sn>[^/]+/\d+)/?$', topology_access_check, dict_topology_sip_remove),
+    (r'^topology(?P<tid>\d+)/delete/?$',               topology_access_check, dict_topology_delete),
+    (r'^topology(?P<tid>\d+)/readme/?$',                topology_access_check, dict_topology_readme),
+    (r'^topology(?P<tid>\d+)/rtable/?$',                topology_access_check, dict_topology_rtable),
+    (r'^topology(?P<tid>\d+)/xml/?$',                   topology_access_check, dict_topology_to_xml),
+    (r'^templates/?$',                                  topologytemplate_list),
+    (r'^template/create/?$',                            topologytemplate_access_check, dict_topologytemplate_create),
+    (r'^template(?P<template_id>\d+)/?$',               topologytemplate_access_check, dict_topologytemplate_view),
+    (r'^template(?P<template_id>\d+)/spec/?$',          topologytemplate_access_check, dict_topologytemplate_spec),
+    (r'^template(?P<template_id>\d+)/readme/?$',        topologytemplate_access_check, dict_topologytemplate_readme),
+    (r'^template(?P<template_id>\d+)/rtable/?$',        topologytemplate_access_check, dict_topologytemplate_rtable),
+    (r'^template(?P<template_id>\d+)/delete/?$',        topologytemplate_access_check, dict_topologytemplate_delete),
     (r'^user/create/?$',                                user_access_check, dict_user_create),
-    (r'^user/(?P<un>\w+)/change_password/?$',           user_access_check, dict_user_change_pw),
-    (r'^user/(?P<what>\w+)/delete/?$',                  user_access_check, dict_user_delete),
     (r'^user/(?P<un>\w+)/?$',                           user_access_check, dict_user_profile),
-
-    # stats URLs
-    (r'^stats/search/?$',                               stats_search),
+    (r'^user/(?P<un>\w+)/renew_auth_key/?$',            user_access_check, dict_user_renew_auth),
+    (r'^user/(?P<un>\w+)/change_password/?$',           user_access_check, dict_user_change_pw),
+    (r'^user/(?P<un>\w+)/delete/?$',                    user_access_check, dict_user_delete),
+    (r'^user/(?P<un>\w+)/undelete/?$',                  user_access_check, dict_user_undelete),
+    (r'^doc/(?P<name>\w.*)?$',                          doc_view, {}),
+    (r'^setup/?$',                                      setup, {}),
+    (r'^setup/doc/.*$',                                 setup_doc, {})
 )
+
 urlpatterns += patterns('',
     (r'^favicon[.]ico$', redirect_to, {'url':'/media/favicon.ico'}),
     (r'^js/(?P<file>.*)[.]js$', redirect_to_file, {'folder':'/media/js/', 'ext':'js'}),

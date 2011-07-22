@@ -21,6 +21,8 @@ from django.db.models import AutoField, BooleanField, CharField, DateField, \
 from django.db.models.signals import post_init
 from django.contrib.auth.models import User
 
+import permissions
+
 def get_delta_time_sec(t1, t2):
     """Returns the number of seconds between two times."""
     deltaT = t2 - t1
@@ -47,8 +49,16 @@ class Organization(Model):
     name = CharField(max_length=30, unique=True, verbose_name="Name")
     parentOrg = ForeignKey('self', null=True, blank=True)
     boss = ForeignKey(User, related_name='org_boss_id',
-                      help_text='User with complete control of this organization.')
+                      help_text='User with complete control of 1this organization.')
     admins = ManyToManyField(User, null=True, blank=True)
+
+    class Meta:
+        permissions = (
+            ("organization_use_org", "View attributes of own organization"),
+            ("organization_use_any", "View attributes of any organization"),
+            ("organization_change_org", "Change attributes of own organization"),
+            ("organization_change_any", "Change attributes of any organization"),
+        )
 
     def get_num_students(self):
         return len(User.objects.filter(userprofile__org=self))
@@ -61,19 +71,50 @@ class Organization(Model):
 
 class UserProfile(Model):
     """Defines extra information to associate with a User."""
-    POSITION_CHOICES = (
-        (0, u'VNS Admin'),
-        (1, u'Student'),
-        (3, u'Instructor'),
-        (4, u'TA'),
-        (5, u'Student (Self-Guided)'),
-    )
+    ADMIN = 0
+    STUDENT = 1
+    INSTRUCTOR = 3
+    TA = 4
+    STUDENT_SELF_GUIDED = 5
+    POSITIONS = ((0,u'VNS Admin'),
+                 (1,u'Student'),
+                 (3,u'Instructor'),
+                 (4,u'TA'),
+                 (5,u'Student (Self-Guided)'))
+    PERMISSIONS = {0:"vnswww.userprofile_add_admin",
+                   1:"vnswww.userprofile_add_student",
+                   3:"vnswww.userprofile_add_instructor",
+                   4:"vnswww.userprofile_add_ta",
+                   5:"vnswww.userprofile_add_selfguided"}
+    GROUPS = {0:"admin",
+              1:"student",
+              3:"instructor",
+              4:"ta",
+              5:"selfguided"}
+
+    # This should really go in the User class, but since that's built into django,
+    # they'll have to go here
+    class Meta:
+        permissions = (
+            ("userprofile_add_student", "Add student users"),
+            ("userprofile_add_ta", "Add TA users"),
+            ("userprofile_add_instructor", "Add instructor users"),
+            ("userprofile_add_admin", "Add VNS admin users"),
+            ("userprofile_add_selfguided", "Add self-guided student users"),
+            ("userprofile_change_any", "Change password, profile, etc. of any user"),
+            ("userprofile_change_org", "Change password, profile, etc. of any user from same organization"),
+            ("userprofile_delete_self", "Delete or mark as retired yourself"),
+            ("userprofile_delete_any", "Delete or mark as retired any user"),
+            ("userprofile_delete_org", "Delete or mark as retired any user from same organization"),
+            ("userprofile_use_any", "View the profile of any user"),
+            ("userprofile_use_org", "View the profile of any user from the same organization"),
+        )
 
     SIM_KEY_SZ = 64 # size in bytes
 
     user = ForeignKey(User, unique=True, verbose_name="")
     org  = ForeignKey(Organization, verbose_name="Organization")
-    pos  = IntegerField(choices=POSITION_CHOICES, verbose_name="Position")
+    pos  = IntegerField(choices=POSITIONS, verbose_name="Position")
     sim_key = CharField(max_length=SIM_KEY_SZ,
                         help_text="The ASCII string (system-generated) "+
                                   "which the user uses to authenticate with the simulator.")
@@ -104,7 +145,7 @@ class UserProfile(Model):
         self.set_sim_auth_key(''.join(random.choice(chars) for _ in range(UserProfile.SIM_KEY_SZ)))
 
     def get_position_str(self):
-        for pos_id, pos_name in UserProfile.POSITION_CHOICES:
+        for pos_id, pos_name in UserProfile.POSITIONS:
             if pos_id == self.pos:
                 return pos_name
         return 'Unknown'
@@ -116,7 +157,7 @@ class UserProfile(Model):
     def get_usable_topologies(self):
         """Returns the topologies which this user is permitted to use beyond
         those owned by the user."""
-        return [tuf.topology for tuf in TopologyUserFilter.objects.filter(user=self.user)]
+        return permissions.get_allowed_topologies(self.user)
 
     def is_staff(self):
         return self.pos != 1
@@ -127,14 +168,33 @@ class UserProfile(Model):
     def __unicode__(self):
         return u'%s' % self.user.__unicode__()
 
+    def can_create_topology(self):
+        return permissions.allowed_topology_access_create(self.user)
+    
+    def can_create_topologytemplate(self):
+        return permissions.allowed_topologytemplate_access_create(self.user)
+
+    def can_create_user(self):
+        return permissions.allowed_user_access_create(self.user)
+
+    def can_change_user(self, up):
+        return permissions.allowed_user_access_change(self.user, up.user)
+        
+
 class TopologyTemplate(Model):
     """A template network topology.  This includes the nodes, links, and subnet
     information."""
+    PRIVATE = 0
+    PROTECTED = 1
+    PUBLIC = 2
     VISIBILITY_CHOICES = (
         (0, u'Private - owner only'),
         (1, u'Protected - owner and organization only'),
         (2, u'Public - anyone'),
     )
+    visibility_dict = {0 : u'Private - owner only',
+                       1 : u'Protected - owner and organization only',
+                       2 : u'Public - anyone'}
 
     name = CharField("Name", max_length=30, unique=True)
     date_updated = DateField(auto_now=True, auto_now_add=True)
@@ -153,6 +213,17 @@ $Server1.eth0.ip_SameSzLD [the latter will be replaced with the IP plus one \
 space and enough dashes on the left so that the replacement is the same size \
 as the source text]).''')
     rtable = TextField(help_text='Template of the rtable for the topology, if any.')
+    specification = TextField(help_text='Specification this topology template was created from.')
+
+    class Meta:
+        permissions = (
+            ("topologytemplate_use_any", "View and use any topology template"),
+            ("topologytemplate_use_org", "View and use topology templates from the same organization"),
+            ("topologytemplate_change_any", "Change any topology template"),
+            ("topologytemplate_change_org", "Change any topology template from the same organization"),
+            ("topologytemplate_delete_any", "Delete any topology template"),
+            ("topologytemplate_delete_org", "Delete any topology template from the same organization"),
+        )
 
     def get_root_port(self):
         """Returns the "root" port of the topology.  This is the port connected
@@ -212,6 +283,9 @@ as the source text]).''')
 
     def render_rtable(self, sim, topo):
         return self.render_template_text(sim, topo, self.rtable)
+
+    def get_visibility_str(self):
+        return self.visibility_dict[self.visibility]
 
     def __unicode__(self):
         return u'%s' % self.name
@@ -420,10 +494,23 @@ class Topology(Model):
                              'topology by specifying this number.')
     uuid = CharField(max_length=32)
     owner = ForeignKey(User)
+    org = ForeignKey(Organization)
     template = ForeignKey(TopologyTemplate)
     enabled = BooleanField(help_text='Whether this topology is active.')
     public = BooleanField(help_text='Whether any user may connect to a node on this topology.')
     temporary = BooleanField(help_text='Whether this topology was only allocated temporarily.')
+
+    allowed_users = ManyToManyField(User, related_name='allowed_topology', help_text='Users allowed to view and connect to this topology')
+
+    class Meta:
+        permissions = (
+            ("topology_use_any", "View and connect to any topology"),
+            ("topology_use_org", "View and connect to any topology from own organization"),
+            ("topology_delete_any", "Delete any topology"),
+            ("topology_delete_org", "Delete any topology from own organization"),
+            ("topology_change_any", "Change any topology"),
+            ("topology_change_org", "Change any topology from own organization"),
+        )
 
     @staticmethod
     def __post_init__(sender, instance, **kwargs):
@@ -459,7 +546,7 @@ class Topology(Model):
             return 0
 
     def get_permitted_users(self):
-        return [tuf.user for tuf in TopologyUserFilter.objects.filter(topology=self)]
+        return self.allowed_users.filter()
 
     def get_permitted_source_ips(self):
         return [x.subnet_mask_str() for x in TopologySourceIPFilter.objects.filter(topology=self)]
@@ -504,14 +591,14 @@ class TopologySourceIPFilter(Model):
     def __unicode__(self):
         return u'%s may interact with %s' % (self.__subnet_str(), self.topology.__unicode__())
 
-class TopologyUserFilter(Model):
-    """Lists the users which may interact with a topology by connecting to a
-    virtual client in the topology.  A topology's owner always has this privilege."""
-    topology = ForeignKey(Topology)
-    user = ForeignKey(User)
+#class TopologyUserFilter(Model):
+#    """Lists the users which may interact with a topology by connecting to a
+#    virtual client in the topology.  A topology's owner always has this privilege."""
+#    topology = ForeignKey(Topology)
+#    user = ForeignKey(User)
 
-    def __unicode__(self):
-        return u'%s may interact with %s' % (self.user.username, self.topology.__unicode__())
+#    def __unicode__(self):
+#        return u'%s may interact with %s' % (self.user.username, self.topology.__unicode__())
 
 class IPAssignment(Model):
     """Maps an IP address to a port on a particular node in a particular
@@ -564,6 +651,12 @@ class IPBlock(Model):
     usable_by_child_orgs = BooleanField(default=True, help_text='Whether ' + \
         'any organization whose parent is the organization who owns this ' + \
         'IP block may allocate IPs from this IP block.')
+
+    class Meta:
+        permissions = (
+            ("ipblock_use_any", "Allocate addresses from any IP block"),
+            ("ipblock_use_org", "Allocate addresses from any IP block from your organization")
+        )
 
     def __unicode__(self):
         return u'%s/%d' % (self.subnet, self.mask)
@@ -707,3 +800,8 @@ class UsageStats(Model):
 class SystemInfo(Model):
     name = CharField(max_length=128, unique=True)
     value = TextField()
+
+
+class Doc(Model):
+    name = CharField(max_length=128, unique=True, db_index=True)
+    text = TextField()
