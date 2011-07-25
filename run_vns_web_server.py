@@ -55,7 +55,7 @@ wsgi_root = wsgi_resource()
 root = Root(wsgi_root)
 
 # serve Django media files off of /media:
-staticrsrc = static.File(path.join(path.abspath("."), "web/media"))
+staticrsrc = static.File(path.join(path.abspath(__file__), "web/media"))
 root.putChild("media", staticrsrc)
 
 # serve the site
