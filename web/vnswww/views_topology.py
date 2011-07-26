@@ -301,6 +301,10 @@ def topology_rtable(request, tid, topo):
     return HttpResponse(topo.get_rtable(), mimetype='text/plain')
 
 def topology_to_xml(request, tid, topo):
+    """Creates XML that can be loaded with the Clack Graphical Router.
+    @param request  An HTTP request
+    @param tid  Database ID of the topology to convert to XML
+    @param topo  The topology to convert to XML"""
     # The argument topo is the DB's Topology object passed from the access  
     # checker - ignore it and instead create the needed vns.Topology object.
     topo = VNSTopology(tid, None, None, None, False)
@@ -333,5 +337,5 @@ def topology_to_xml(request, tid, topo):
         nodes_xml += xml_hdr + xml_body + '</host>\n'
 
     # build the topology's XML
-    xml = '<topology id="%d">\n%s</topology>' % (topo.id, nodes_xml)
+    xml = '<topology id="%d" server="%s" port="3250">\n%s</topology>' % (topo.id, request.META['SERVER_NAME'], nodes_xml)
     return HttpResponse(xml, mimetype='text/xml')
