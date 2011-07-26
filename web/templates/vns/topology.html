@@ -26,7 +26,7 @@
                 {% for pu in t.get_permitted_users %}
                     {{ pu|unamelink }} ({{ pu|fnamelink }})
                     {% if user.is_authenticated %}
-                    {% if user == t.owner or user.is_superuser %}
+                    {% if change %}
                         - <a href="/topology{{ t.id }}/disallow_user/{{ pu.username }}/">remove</a>
                     {% endif %}
                     {% endif %}
@@ -42,7 +42,7 @@
                 {% for ps in t.get_permitted_source_ips %}
                     {{ ps }}
                     {% if user.is_authenticated %}
-                    {% if user == t.owner or user.is_superuser %}
+                    {% if change %}
                         - <a href="/topology{{ t.id }}/disallow_srcip/{{ ps }}/">remove</a>
                     {% endif %}
                     {% endif %}
@@ -60,17 +60,18 @@
         </tr><tr>
             <th>IPs Assigned</th>
             <td>{{ t.get_where_ips_allocated.start_addr }}/{{ t.get_where_ips_allocated.mask }} ({{ t.get_where_ips_allocated.size }} addresses)</td>
-        {% if user.is_authenticated %}
-        {% if user == t.owner or user.is_superuser %}
         </tr><tr>
             <th>Actions</th>
             <td>
+                {% if change %}
                 <a href="/topology{{ t.id }}/allow_new_user/">Add permitted user</a><br/>
                 <a href="/topology{{ t.id }}/allow_new_srcip/">Add permitted source IP for traffic</a><br/>
+                {% endif %}
+                {% if delete %}
                 <a href="/topology{{ t.id }}/delete/">Delete this topology</a>
+                {% endif %}
+				<a href="/topology={{ t.id }}/?token={{ token }}">View Clack XML</a>
             </td>
-        {% endif %}
-        {% endif %}
         </tr>
     </table>
 

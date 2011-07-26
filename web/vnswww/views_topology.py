@@ -11,6 +11,7 @@ from SubnetTree import SubnetTree
 
 import models as db
 import permissions
+import crypto
 from vns.AddressAllocation import instantiate_template
 from vns.Topology import Topology as VNSTopology
 
@@ -86,9 +87,9 @@ def topology_create(request):
 
 def topology_access_check(request, callee, action, **kwargs):
     """Checks that the user can access the functions they're trying to, and
-    if they can calls callee"""
-    """Check that the user is allowed access, and if they are call the given
-    Callable.
+    if they can calls callee.  There are two valid authentication methods - 
+    django logihn, as normally used for the website, and a cryptographic token
+    supplied in the HTTP GET, as used for clack.
     @param request  An HTTP request
     @param callee  Gives the Callable to call
     @param action  One of "add", "change", "use", "delete", describing the
@@ -96,20 +97,22 @@ def topology_access_check(request, callee, action, **kwargs):
     @param tid  The ID of the topology in question; not used for
     action = "add"
     @exception ValueError  If an action is unrecognised
-    @exception KeyError  If an option is missing"""
+    @exception KeyError  If an option is missing
+    @return HttpResponse"""
 
     def denied():
         """Generate an error message and redirect if we try do something to a
         topology we're not allowed to"""
         messages.error(request, "Either this topology doesn't exist or you don't "
                                 "have permission to %s it." % action)
-        return HttpResponseRedirect('/')
+        return HttpResponseRedirect('/login/')
 
     def denied_add():
         """Generate an error message and redirect if we try to create a topology
         and are not allowed to"""
         messages.error(request, "You don't have permission to create topologies.")
-        return HttpResponseRedirect('/')
+        return HttpResponseRedirect('/login/')
+
     
     # If we're trying to add a template, don't need to get the template itself
     if action == "add":
@@ -131,10 +134,22 @@ def topology_access_check(request, callee, action, **kwargs):
             return denied()
 
         if action == "use":
+            # See if there is an HTTP GET token - if there is, try to use the token
+            # method for authentication
+            try:
+                token = request.GET["token"]
+            except KeyError:
+                pass
+            else:
+                # See if the token is valid
+                user = crypto.validate_token(token)
+                if user != None and permissions.allowed_topology_access_use(user, topo):
+                    return callee(request, topo=topo, **kwargs)
             if permissions.allowed_topology_access_use(request.user, topo):
-                return callee(request, topo=topo, **kwargs)
+                 return callee(request, topo=topo, **kwargs)
             else:
                 return denied()
+
         elif action == "change":
             if permissions.allowed_topology_access_change(request.user, topo):
                 return callee(request, topo=topo, **kwargs)
@@ -150,8 +165,19 @@ def topology_access_check(request, callee, action, **kwargs):
 
     
 
-def topology_info(request, tid, topo):
-    return direct_to_template(request, 'vns/topology.html', {'t':topo, 'tid':tid})
+def topology_info(request, tid, topo):    
+    # Create an authentication token valid for 30 minutes for the user to access
+    # Clack stuff with
+    token = crypto.create_token(request.user, 1800)
+    
+    # See what permissions the user has on this topology
+    can_change = permissions.allowed_topology_access_change(request.user, topo)
+    can_delete = permissions.allowed_topology_access_change(request.user, topo)
+    return direct_to_template(request, 'vns/topology.html', {'t':topo,
+                                                             'tid':tid,
+                                                             'token':token,
+                                                             'change':can_change,
+                                                             'delete':can_delete})
 
 @login_required
 def topologies_list(request):
