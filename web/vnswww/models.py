@@ -141,7 +141,9 @@ class UserProfile(Model):
         self.sim_key = str
 
     def generate_and_set_new_sim_auth_key(self):
-        chars = string.ascii_letters + string.digits + string.punctuation
+        # Don't use all punctuation as some characters cause problems with
+        # escaping in XML
+        chars = string.ascii_letters + string.digits + ".,<>|/$*()#~'@-+=:;_[]{}"
         self.set_sim_auth_key(''.join(random.choice(chars) for _ in range(UserProfile.SIM_KEY_SZ)))
 
     def get_position_str(self):
