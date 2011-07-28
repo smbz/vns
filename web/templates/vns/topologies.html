@@ -28,8 +28,8 @@
             <td rowspan="{{ t.template_num }}">{{ t.template.name }}</td>
             {% endif %}
             <td>{{ t.id }}</td>
-            <td>{{ t.get_where_ips_allocated.start_addr }}/{{ t.get_where_ips_allocated.mask }}</td>
-            <td>{{ t.get_where_ips_allocated.block_from.org.name }}</td>
+            <td>{% if t.get_ip_allocation %}{{ t.get_ip_allocation.start_addr }}/{{ t.get_ip_allocation.mask }}{% else %}None{% endif %}</td>
+            <td>{{ t.get_where_ips_allocated }} ({{ t.get_where_ips_allocated.org.name }})</td>
             <td><a href="/topology{{ t.id }}/">Details</a></td>
         </tr>
     {% empty %}

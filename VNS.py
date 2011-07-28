@@ -270,6 +270,8 @@ class VNSSimulator:
             return (None, 'topology %d is missing an IP assignment' % tid)
         except db.IPBlockAllocation.DoesNotExist:
             return (None, 'topology %d is not allocated any IPs' % tid)
+        except AddressAllocation.IPError:
+            return (None, 'not enough IPs to allocate for topology %d' % tid)
         except:
             msg = 'topology instantiation unexpectedly failed'
             log_exception(logging.ERROR, msg)
@@ -317,6 +319,7 @@ class VNSSimulator:
                 topo.get_stats().finalize()
                 if topo.is_temporary():
                     AddressAllocation.free_topology(tid)
+                AddressAllocation.deallocate_from_topology(topo.t)
                 for ti_conn in topo.interactors:
                     self.terminate_ti_connection(ti_conn, 'GOODBYE: Topology %d has been shutdown' % tid)
 

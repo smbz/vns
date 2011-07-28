@@ -6,6 +6,7 @@ from django.views.generic.simple import direct_to_template, redirect_to
 from vnswww import models as db
 from vnswww.views import checked_delete, homepage
 from vnswww.views_doc import *
+from vnswww.views_group import *
 from vnswww.views_org import *
 from vnswww.views_setup import setup, setup_doc
 from vnswww.views_stats import stats_search
@@ -71,8 +72,11 @@ dict_topologytemplate_rtable      = make_access_check_dict(topologytemplate_rtab
 dict_topologytemplate_create      = make_access_check_dict(topologytemplate_create, "add")
 dict_topologytemplate_delete      = make_access_check_dict(topologytemplate_spec, "delete")
 
-# dictionaries which specify access requirements for various topology template views
+# dictionaries which specify access requirements for various organization views
 dict_org_users      = make_access_check_dict(org_users, "use")
+
+# dictionaries which specify access requirements for various group views
+dict_group_add      = make_access_check_dict(group_add, "add")
 
 def redirect_to_file(request, folder, file, ext):
     return redirect_to(request, folder + file + '.' + ext)
@@ -110,9 +114,11 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^user/(?P<un>\w+)/change_password/?$',           user_access_check, dict_user_change_pw),
     (r'^user/(?P<un>\w+)/delete/?$',                    user_access_check, dict_user_delete),
     (r'^user/(?P<un>\w+)/undelete/?$',                  user_access_check, dict_user_undelete),
-    (r'^doc/(?P<name>\w.*)?$',                          doc_view, {}),
-    (r'^setup/?$',                                      setup, {}),
-    (r'^setup/doc/.*$',                                 setup_doc, {})
+    (r'^group/create/?$',                               user_access_check, dict_group_add),
+    (r'^group/(?P<gn>\w+)/?$',                          group_view),
+    (r'^doc/(?P<name>\w.*)?$',                          doc_view),
+    (r'^setup/?$',                                      setup),
+    (r'^setup/doc/.*$',                                 setup_doc)
 )
 
 urlpatterns += patterns('',

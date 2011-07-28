@@ -10,6 +10,7 @@ import time
 from django.contrib.auth.models import User
 
 from settings import ARP_CACHE_TIMEOUT, MAY_FORWARD_TO_PRIVATE_IPS, WEB_SERVER_ROOT_WWW
+from AddressAllocation import allocate_to_topology
 from DRRQueue import DRRQueue
 from HTTPServer import HTTPServer
 from LoggingHelper import log_exception, addrstr, pktstr
@@ -67,6 +68,9 @@ class Topology():
             raise TopologyCreationException('topology %d is disabled' % tid)
         self.id = tid
         self.temporary = self.t.temporary
+
+        # Allocate an IP block and assign IPs if necessary
+        allocate_to_topology(self.t, self.t.ip_block, user)
 
         # determine what IP block is allocated to this topology
         ipba = db.IPBlockAllocation.objects.get(topology=self.t)

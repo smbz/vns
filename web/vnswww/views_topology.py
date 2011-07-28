@@ -144,6 +144,7 @@ def topology_access_check(request, callee, action, **kwargs):
                 # See if the token is valid
                 user = crypto.validate_token(token)
                 if user != None and permissions.allowed_topology_access_use(user, topo):
+                    request.user = user
                     return callee(request, topo=topo, **kwargs)
             if permissions.allowed_topology_access_use(request.user, topo):
                  return callee(request, topo=topo, **kwargs)
@@ -333,7 +334,7 @@ def topology_to_xml(request, tid, topo):
     @param topo  The topology to convert to XML"""
     # The argument topo is the DB's Topology object passed from the access  
     # checker - ignore it and instead create the needed vns.Topology object.
-    topo = VNSTopology(tid, None, None, None, False)
+    topo = VNSTopology(tid, None, None, request.user, False)
     
     # populate xml IDs
     id = 1

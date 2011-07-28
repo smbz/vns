@@ -24,19 +24,33 @@ def free_topology(tid):
     except db.Topology.DoesNotExist:
         logging.warning('asked to free non-existent topology %d' % tid)
 
-def instantiate_template(org, owner, template, ip_block_from, src_filters, temporary,
-                         use_recent_alloc_logic=True, public=False,
-                         use_first_available=False):
-    """Instantiates a new Topology object, allocates a block of addresses for
-    it, and assigns addresses to each port in it.  The block will come from
-    ip_block_from.  The topology will be assigned the specified source filters.
-    If use_first_available is True, then the first available block will be used.
-    Otherwise, a random available block will be used.  The latter is generally
-    better suited to temporary allocations (ones that only last a short time).
-    A tuple is returned -- if the first element is not None, then an error has
-    occurred and nothing was instantiated (the first element is an error
-    message).  Otherwise, elements 2-4 are the Topology, IPBlockAllocation, and
-    PortTreeNode root node objects."""
+class IPError(Exception):
+    pass
+
+def allocate_to_topology(topo, ip_block_from, owner, use_first_available=False, use_recent_alloc_logic=True):
+    """Allocates IP addresses to an existing topology.  If the topology already
+    has IPs assigned, this does nothing.
+    @param topo The Topology to allocate IPs to
+    @param ip_block_from The IPBlock from which to allocate addresses
+    @param use_first_available If True, use the first available IP addresses
+    rather than a random block
+    @param owner The user who has caused this allocation to take place
+    @exception IPError If there are not enough IPs to allocate"""
+
+    # Check we don't have any IPs already
+    try:
+        _ = db.IPBlockAllocation.objects.get(topology=topo)
+    except db.IPBlockAllocation.DoesNotExist:
+        pass
+    else:
+        # We already have an IP block allocation - do nothing
+        return
+
+    # Get the template this topology was created from, and the topology's source
+    # filters
+    template = topo.template
+    src_filters = [(sif.ip, sif.mask) for sif in db.TopologySourceIPFilter.objects.filter(topology=topo)]
+
     # build a depth-first "tree" of the topology from the port connected to the gateway
     root = template.get_root_port()
     if not root:
@@ -56,10 +70,10 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
         # allocate a subblock of IPs for the new topology
         allocs = allocate_ip_block(ip_block_from, 1, num_addrs, src_filters, use_first_available)
         if not allocs:
-            return ("insufficient free IP addresses",)
+            raise IPError("Not enough IP addresses to allocate for topology %d" % topo.id)
         alloc = allocs[0]
 
-    # create the topology and assign IP addresses
+    # Assign IP addresses
     start_addr = struct.unpack('>I', inet_aton(alloc.start_addr))[0]
     if tree:
         assignments = tree.assign_addr(start_addr, alloc.size())
@@ -69,6 +83,57 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
             assignments.append((link.port1, start_addr+2*i,   31))
             assignments.append((link.port2, start_addr+2*i+1, 31))
 
+    # Add the allocation to the database
+    alloc.topology = topo
+    alloc.save()
+
+    # Add the allocation to the list of recently allocated blocks
+    if use_recent_alloc_logic:
+        ra = db.RecentIPBlockAllocation()
+        ra.user = owner
+        ra.template = template
+        ra.start_addr = alloc.start_addr
+        ra.mask = alloc.mask
+        ra.save()
+
+    # Add the assignments to the database
+    for port, ip, mask_sz in assignments:
+        ipa = db.IPAssignment()
+        ipa.topology = topo
+        ipa.port = port
+        ipa.ip = inet_ntoa(struct.pack('>I', ip))
+        ipa.mask = mask_sz
+        ipa.save()
+        logging.info('IP assignment for topology %d: %s' % (topo.id, ipa))
+
+def deallocate_from_topology(topo):
+    """Removes any IP allocations and assignments from a topology."""
+    # Check that the topology is not active
+    try:
+        _ = db.UsageStats.objects.get(topo_uuid=topo.uuid, active=True)
+    except db.UsageStats.DoesNotExist:
+        pass
+    else:
+        raise IPError("Cannot deallocate addresses while topology is in use")
+    
+    iba = db.IPBlockAllocation.objects.get(topology=topo)
+    iba.delete()
+    for ia in db.IPAssignment.objects.filter(topology=topo):
+        ia.delete()
+
+def instantiate_template(org, owner, template, ip_block_from, src_filters, temporary,
+                         use_recent_alloc_logic=True, public=False,
+                         use_first_available=False):
+    """Instantiates a new Topology object.  The IP addresses will come from
+    ip_block_from.  The topology will be assigned the specified source filters.
+    If use_first_available is True, then the first available block will be used.
+    Otherwise, a random available block will be used.  The latter is generally
+    better suited to temporary allocations (ones that only last a short time).
+    A tuple is returned -- if the first element is not None, then an error has
+    occurred and nothing was instantiated (the first element is an error
+    message).  Otherwise, elements 2-4 are the Topology, IPBlockAllocation, and
+    PortTreeNode root node objects."""
+
     t = db.Topology()
     t.org = org
     t.owner = owner
@@ -76,10 +141,9 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
     t.enabled = True
     t.public = public
     t.temporary = temporary
+    t.ip_block = ip_block_from
     t.save()
-    alloc.topology = t
-    alloc.save()
-    logging.info("Instantiated a new topology for %s from '%s': %s" % (owner, t.template.name, alloc))
+    logging.info("Instantiated a new topology for %s from '%s'" % (owner, t.template.name))
 
     for sf_ip, sf_mask in src_filters:
         tsif = db.TopologySourceIPFilter()
@@ -89,25 +153,7 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
         tsif.save()
         logging.info('IP source filter for new topology %d: %s' % (t.id, tsif))
 
-    for port, ip, mask_sz in assignments:
-        ipa = db.IPAssignment()
-        ipa.topology = t
-        ipa.port = port
-        ipa.ip = inet_ntoa(struct.pack('>I', ip))
-        ipa.mask = mask_sz
-        ipa.save()
-        logging.info('IP assignment for new topology %d: %s' % (t.id, ipa))
-
-    # save the allocation as a "recent" allocation for this user
-    if use_recent_alloc_logic:
-        recent_alloc = db.RecentIPBlockAllocation()
-        recent_alloc.user = owner
-        recent_alloc.template = t.template
-        recent_alloc.start_addr = alloc.start_addr
-        recent_alloc.mask = alloc.mask
-        recent_alloc.save()
-
-    return (None, t, alloc, tree)
+    return (None, t, None, None)
 
 def allocate_ip_block(block_from, num_blocks_to_alloc, num_addrs_per_block, src_filters, use_first_available):
     """Finds and allocates num_blocks_to_alloc block(s) each of size

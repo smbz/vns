@@ -56,10 +56,10 @@
             <td>{{ t.template.name }}</td>
         </tr><tr>
             <th>IPs Allocated From</th>
-            <td>{{ t.get_where_ips_allocated.block_from }} ({{ t.get_where_ips_allocated.block_from.org.name }})</td>
+            <td>{{ t.get_where_ips_allocated }} ({{ t.get_where_ips_allocated.org.name }})</td>
         </tr><tr>
             <th>IPs Assigned</th>
-            <td>{{ t.get_where_ips_allocated.start_addr }}/{{ t.get_where_ips_allocated.mask }} ({{ t.get_where_ips_allocated.size }} addresses)</td>
+            <td>{% if t.get_ip_allocation %}{{ t.get_ip_allocation.start_addr }}/{{ t.get_ip_allocation.mask }} ({{ t.get_ip_allocation.size }} addresses){% else %}None{% endif %}</td>
         </tr><tr>
             <th>Actions</th>
             <td>
@@ -68,7 +68,7 @@
                 <a href="/topology{{ t.id }}/allow_new_srcip/">Add permitted source IP for traffic</a><br/>
                 {% endif %}
                 {% if delete %}
-                <a href="/topology{{ t.id }}/delete/">Delete this topology</a>
+                <a href="/topology{{ t.id }}/delete/">Delete this topology</a><br/>
                 {% endif %}
 				<a href="/topology={{ t.id }}/?token={{ token }}">View Clack XML</a>
             </td>

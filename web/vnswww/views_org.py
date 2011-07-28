@@ -70,7 +70,15 @@ def org_access_check(request, callee, action, **kwargs):
 def org_users(request, org, on):
     tn = 'vns/org_users.html'
     org = db.Organization.objects.get(name=on)
+
+    # Get a list of visible users from this organization
     users = list(permissions.get_allowed_users(request.user).filter(org=org, retired=False))
     users.sort(db.UserProfile.cmp_pos_order)
-    return direct_to_template(request, tn, {'org':org, 'users':users})
 
+    # Get a list of users which this user can delete
+    l = lambda up: permissions.allowed_user_access_delete(request.user, up.user)
+    deletable_users = filter(l, list(users))
+
+    return direct_to_template(request, tn, {'org':org,
+                                            'users':users,
+                                            'deletable_users':deletable_users})

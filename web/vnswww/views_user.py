@@ -152,6 +152,7 @@ def user_create(request):
                 except:
                     # Give up trying to do anything
                     pass
+                # Re-raise the error, so we can see what's going on in debug mode
                 raise
 
     else:

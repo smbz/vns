@@ -181,6 +181,9 @@ class UserProfile(Model):
 
     def can_change_user(self, up):
         return permissions.allowed_user_access_change(self.user, up.user)
+
+    def can_delete_user(self, up):
+        return permissions.allowed_user_access_delete(self.user, up.user)
         
 
 class TopologyTemplate(Model):
@@ -489,6 +492,29 @@ class Link(Model):
                                           self.port1.node.name, self.port1.name,
                                           self.port2.node.name, self.port2.name)
 
+class IPBlock(Model):
+    """A block of IP addresses which can be allocated to topologies in a
+    particular simulator."""
+    simulator = ForeignKey(Simulator,
+                           help_text='The simulator which owns this block.')
+    parentIPBlock = ForeignKey('self', null=True, blank=True,
+                               help_text='The larger block to which this belongs.')
+    org = ForeignKey(Organization)
+    subnet = IPAddressField()
+    mask = IntegerField('Subnet Mask (# of significant bits in the subnet)')
+    usable_by_child_orgs = BooleanField(default=True, help_text='Whether ' + \
+        'any organization whose parent is the organization who owns this ' + \
+        'IP block may allocate IPs from this IP block.')
+
+    class Meta:
+        permissions = (
+            ("ipblock_use_any", "Allocate addresses from any IP block"),
+            ("ipblock_use_org", "Allocate addresses from any IP block from your organization")
+        )
+
+    def __unicode__(self):
+        return u'%s/%d' % (self.subnet, self.mask)
+
 class Topology(Model):
     """An instantiation of a topology template."""
     id = AutoField(primary_key=True,
@@ -503,6 +529,7 @@ class Topology(Model):
     temporary = BooleanField(help_text='Whether this topology was only allocated temporarily.')
 
     allowed_users = ManyToManyField(User, related_name='allowed_topology', help_text='Users allowed to view and connect to this topology')
+    ip_block = ForeignKey(IPBlock)
 
     class Meta:
         permissions = (
@@ -526,7 +553,7 @@ class Topology(Model):
             sim = IPBlockAllocation.objects.get(topology=self).block_from.simulator
             return self.template.render_readme(sim, self)
         except IPBlockAllocation.DoesNotExist:
-            return 'The readme cannot be generated unless the topology is assigned IPs.'
+            return 'The readme cannot be generated unless the topology is in use and assigned IPs.'
 
     def get_rtable(self):
         """Returns the rtable for this topology.  An error string will be returned
@@ -535,13 +562,16 @@ class Topology(Model):
             sim = IPBlockAllocation.objects.get(topology=self).block_from.simulator
             return self.template.render_rtable(sim, self)
         except IPBlockAllocation.DoesNotExist:
-            return 'The rtable cannot be generated unless the topology is assigned IPs.'
+            return 'The rtable cannot be generated unless the topology is in use and assigned IPs.'
 
     def has_rtable(self):
         return len(self.template.rtable) > 0
 
     def get_where_ips_allocated(self):
-        """Returns the block from which the IPs for this topology were allocated."""
+        """Returns the block from which the IPs for this topology are allocated."""
+        return self.ip_block
+
+    def get_ip_allocation(self):
         try:
             return IPBlockAllocation.objects.get(topology=self)
         except IPBlockAllocation.DoesNotExist:
@@ -639,29 +669,6 @@ class MACAssignment(Model):
         octets = self.mac.split(':')
         assert(len(octets) == 6)
         return struct.pack('> 6B', [int(h, 16) for h in octets])
-
-class IPBlock(Model):
-    """A block of IP addresses which can be allocated to topologies in a
-    particular simulator."""
-    simulator = ForeignKey(Simulator,
-                           help_text='The simulator which owns this block.')
-    parentIPBlock = ForeignKey('self', null=True, blank=True,
-                               help_text='The larger block to which this belongs.')
-    org = ForeignKey(Organization)
-    subnet = IPAddressField()
-    mask = IntegerField('Subnet Mask (# of significant bits in the subnet)')
-    usable_by_child_orgs = BooleanField(default=True, help_text='Whether ' + \
-        'any organization whose parent is the organization who owns this ' + \
-        'IP block may allocate IPs from this IP block.')
-
-    class Meta:
-        permissions = (
-            ("ipblock_use_any", "Allocate addresses from any IP block"),
-            ("ipblock_use_org", "Allocate addresses from any IP block from your organization")
-        )
-
-    def __unicode__(self):
-        return u'%s/%d' % (self.subnet, self.mask)
 
 class IPBlockAllocation(Model):
     """Marks a block of IP addresses as allocated to a particular topology."""

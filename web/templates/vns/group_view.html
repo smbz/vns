@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% load custom_filters %}
 
-{% block titlebar %}{{ org.name }}{% endblock %}
-{% block title %}{{ org.name }} Roster ({{ users|length }}){% endblock %}
+{% block titlebar %}Group {{ group.name }}{% endblock %}
+{% block title %}Group {{ group.name }}{% endblock %}
 
 {% block content %}
     {% if users %}
@@ -32,9 +32,10 @@
             {% endif %}
         </tr>
     {% empty %}
-    <p>There are no users in this organization.</p>
+    <p>There are no users in this group.</p>
     {% endfor %}
     {% if users %}
     </table>
     {% endif %}
 {% endblock %}
+

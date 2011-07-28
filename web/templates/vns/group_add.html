@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+
+{% block titlebar %}Create Group of Users{% endblock %}
+{% block title %}Create Group of Users{% endblock %}
+
+{% block content %}
+    {% if form %}
+        <form action="/group/create/" method="post">
+            <table>
+                {{ form.as_table }}
+                <tr>
+                    <td colspan="2" style="text-align:center"><input type="submit" value="Create group"/></td>
+                </tr>
+            </table>
+        </form>
+    {% endif %}
+{% endblock %}
