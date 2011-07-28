@@ -241,12 +241,13 @@ def group_delete(request, gn):
     has_deleted = False
     for u in users:
         if permissions.allowed_user_access_delete(request.user, u):
-            u.get_profile().retired=True
-            u.save()
+            up = u.get_profile()
+            up.retired=True
+            up.save()
             has_deleted = True
 
-            # Delte any topologies this user owns
-            topos = db.Topology.filter(owner=u)
+            # Delete any topologies this user owns
+            topos = db.Topology.objects.filter(owner=u)
             for t in topos:
                 t.delete()
         else:
