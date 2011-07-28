@@ -116,6 +116,7 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^user/(?P<un>\w+)/undelete/?$',                  user_access_check, dict_user_undelete),
     (r'^group/create/?$',                               user_access_check, dict_group_add),
     (r'^group/(?P<gn>\w+)/?$',                          group_view),
+    (r'^group/(?P<gn>\w+)/delete/?$',                   group_delete),
     (r'^doc/(?P<name>\w.*)?$',                          doc_view),
     (r'^setup/?$',                                      setup),
     (r'^setup/doc/.*$',                                 setup_doc)

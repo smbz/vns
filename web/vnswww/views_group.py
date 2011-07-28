@@ -9,6 +9,12 @@ import models as db
 import permissions
 
 def group_view(request, gn):
+    """View a list of users in a group.  Does not show users that are not
+    visible to the user making the request.
+    @param request  An HttpRequest
+    @oaram gn  The name of the group to view
+    @return HttpResponse"""
+
     tn='vns/group_view.html'
 
     if not request.user.is_authenticated():
@@ -148,7 +154,9 @@ def make_group_add_form(user):
     return GroupAddForm
 
 def group_add(request):
-    """Add many new users, and possibly put them in a group"""
+    """Add many new users, and possibly put them in a group.
+    @param request  An HttpRequest
+    @return HttpResponse"""
     tn='vns/group_add.html'
 
     GroupAddForm = make_group_add_form(request.user)
@@ -176,3 +184,50 @@ def group_add(request):
     else:
         form = GroupAddForm()
         return direct_to_template(request, tn, {'form':form})
+
+def group_delete(request, gn):
+    """Deletes all the users in a group that the user can delete.
+    @param request  An HTTP request
+    @param gn  The name of the group to delete
+    @return HttpResponse"""
+
+    # Get the group
+    try:
+        group = Group.objects.get(name=gn)
+    except Group.DoesNotExist:
+        messages.error(request, "This group does not exist")
+        return HttpResponseRedirect('/')
+
+    # Get all users in the group
+    try:
+        users = User.objects.filter(groups=group)
+    except User.DoesNotExist:
+        messages.error(request, "There are no users in this group")
+        return HttpResponseRedirect('/')
+
+    # Do permission checking and mark the users as retired if
+    # the permission check passes
+    no_perms = False
+    has_deleted = False
+    for u in users:
+        if permissions.allowed_user_access_delete(request.user, u):
+            u.get_profile().retired=True
+            u.save()
+            has_deleted = True
+        else:
+            no_perms = True
+
+    # If the group is empty, delete it
+    if not no_perms:
+        group.delete()
+    
+    # Display a message indicating eny errors or success
+    if no_perms and not has_deleted:
+        messages.error(request, "Could not delete users because of permissions.")
+    elif no_perms and has_deleted:
+        messages.info(request, "Some users could not be deleted because of permissions.  Other users have been deleted.")
+    else:
+        messages.success(request, "Successfully deleted group %s" % gn)
+
+    return HttpResponseRedirect('/')
+
