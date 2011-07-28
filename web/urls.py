@@ -1,5 +1,6 @@
 from django.conf.urls.defaults import *
 from django.contrib import admin
+from django.contrib.auth.models import Group
 from django.views.generic import list_detail
 from django.views.generic.simple import direct_to_template, redirect_to
 
@@ -26,6 +27,12 @@ organizations_info = {
     'queryset': db.Organization.objects.exclude(name='Public').order_by('name'),
     'template_name': 'vns/organizations.html',
     'template_object_name': 'orgs'
+}
+
+group_info = {
+    'queryset': Group.objects.all().order_by('name'),
+    'template_name': 'vns/groups.html',
+    'template_object_name': 'groups'
 }
 
 
@@ -115,8 +122,11 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^user/(?P<un>\w+)/delete/?$',                    user_access_check, dict_user_delete),
     (r'^user/(?P<un>\w+)/undelete/?$',                  user_access_check, dict_user_undelete),
     (r'^group/create/?$',                               user_access_check, dict_group_add),
+    (r'^groups/?$',                                     list_detail.object_list, group_info),
     (r'^group/(?P<gn>\w+)/?$',                          group_view),
     (r'^group/(?P<gn>\w+)/delete/?$',                   group_delete),
+    (r'^group/(?P<gn>\w+)/createtopo/?$',               group_topology_create),
+    (r'^group/(?P<gn>\w+)/deletetopo/?$',               group_topology_delete),
     (r'^doc/(?P<name>\w.*)?$',                          doc_view),
     (r'^setup/?$',                                      setup),
     (r'^setup/doc/.*$',                                 setup_doc)

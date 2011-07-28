@@ -5,6 +5,8 @@ from django.contrib.auth.models import User, Group
 from django.views.generic.simple import direct_to_template
 from django.http import HttpResponseRedirect
 
+from vns.AddressAllocation import instantiate_template
+
 import models as db
 import permissions
 
@@ -17,12 +19,29 @@ def group_view(request, gn):
 
     tn='vns/group_view.html'
 
+    # Check this isn't a built-in group
+    if gn in db.UserProfile.GROUPS.values():
+        messages.error(request, "You cannot view built-in groups.")
+        return HttpResponseRedirect("/groups/")
+
     if not request.user.is_authenticated():
         return HttpResponseRedirect('/login/')
 
+    # Find the group
+    try:
+        group = Group.objects.get(name=gn)
+    except Group.DoesNotExist:
+        messages.error(request, "Group %s does not exist." % gn)
+        return HttpResponseRedirect("/groups/")
+
     # Find the user profiles in this group which the user is allowed to see
-    users = permissions.get_allowed_users(request.user)
-    users = users.filter(user__groups__name=gn)
+    try:
+        users = permissions.get_allowed_users(request.user)
+        users = users.filter(user__groups=group)
+    except User.DoesNotExist:
+        messages.info(request, "There are no users in group %s which you "
+                       "can view." % gn)
+        return HttpResponseRedirect("/groups/")
 
     # Find the user profiles which this user is allowed to delete
     l = lambda up: permissions.allowed_user_access_delete(request.user, up.user)
@@ -30,6 +49,7 @@ def group_view(request, gn):
 
     # Switch to a template to print them out
     return direct_to_template(request, tn, {'users':users,
+                                            'group':group,
                                             'deletable_users':deletable_users})
 
 class UserError(Exception):
@@ -167,6 +187,10 @@ def group_add(request):
             pos = form.cleaned_data['pos']
             users = form.cleaned_data['users']
 
+            # Check that the group is not a group with permissions
+            if group_name in db.UserProfile.GROUPS.values():
+                messages.error(request, "You cannot create a group called %s." % group_name)
+
             # Parse the list of users
             try:
                 insert_users(request.user, users, group_name, int(pos))
@@ -191,6 +215,11 @@ def group_delete(request, gn):
     @param gn  The name of the group to delete
     @return HttpResponse"""
 
+    # Check this isn't a built-in group
+    if gn in db.UserProfile.GROUPS.values():
+        messages.error(request, "You cannot delete built-in groups.")
+        return HttpResponseRedirect("/groups/")
+
     # Get the group
     try:
         group = Group.objects.get(name=gn)
@@ -202,6 +231,7 @@ def group_delete(request, gn):
     try:
         users = User.objects.filter(groups=group)
     except User.DoesNotExist:
+        group.delete()
         messages.error(request, "There are no users in this group")
         return HttpResponseRedirect('/')
 
@@ -214,6 +244,11 @@ def group_delete(request, gn):
             u.get_profile().retired=True
             u.save()
             has_deleted = True
+
+            # Delte any topologies this user owns
+            topos = db.Topology.filter(owner=u)
+            for t in topos:
+                t.delete()
         else:
             no_perms = True
 
@@ -231,3 +266,195 @@ def group_delete(request, gn):
 
     return HttpResponseRedirect('/')
 
+def group_topology_delete(request, gn):
+    """Delete any topologies owned by users in this group.
+    @param request  An HttpRequest
+    @param gn  The name of the group to delete
+    @return HttpResponse"""
+
+    # Check this isn't a built-in group
+    if gn in db.UserProfile.GROUPS.values():
+        messages.error(request, "You cannot change built-in groups.")
+        return HttpResponseRedirect("/groups/")
+
+    # Get the group, users and topologies
+    group = Group.objects.get(name=gn)
+    users = User.objects.filter(groups=group)
+    topos = db.Topology.objects.filter(owner__in=users)
+
+    # Try to delete the topologies, with permissions checking
+    no_perms = False
+    has_deleted = False
+    for t in topos:
+        if permissions.allowed_topology_access_delete(request.user, t):
+            t.delete()
+            has_deleted = True
+        else:
+            no_perms = True
+
+    # Display either a success message or a helpful error message
+    if no_perms and not has_deleted:
+        messages.error(request, "You do not have permission to delete topologies from this group")
+        return HttpResponseRedirect('/')
+    elif no_perms and has_deleted:
+        messages.info(request, "You do not have permissions to delete some of the topologies "
+                      "from this group, but some other topologies have been deleted.")
+        return HttpResponseRedirect('/')
+    else:
+        messages.success(request, "Topologies for this group have been successfully deleted.")
+        return HttpResponseRedirect('/')
+
+def group_topology_create(request, gn):
+    """Create topologies for a group, with each user in the group becoming the
+    owner of one topology.
+    @param request  An HttpRequest
+    @param gn  The name of the group to add the topologies for"""
+
+    tn = "vns/group_topology_create.html"
+
+    # Check this isn't a built-in group
+    if gn in db.UserProfile.GROUPS.values():
+        messages.error(request, "You cannot change built-in groups.")
+        return HttpResponseRedirect("/groups/")
+
+    # Check we're allowed to create topologies
+    if not permissions.allowed_topology_access_create(request.user):
+        messages.info("Please login as a user who is permitted to create topologies.")
+        return HttpResponseRedirect('/login/?next=/topology/create/')
+
+    # Get the group
+    try:
+        group = Group.objects.get(name=gn)
+    except Group.DoesNotExist:
+        messages.error("No group %s" % gn)
+        return HttpResponseRedirect("/groups/")
+
+    # Import a function to create the form
+    from views_topology import make_ctform
+    CreateTopologyForm = make_ctform(request.user)
+    
+    if request.method == "POST":
+        form = CreateTopologyForm(request.POST)
+        if form.is_valid():
+            template_id = form.cleaned_data['template']
+            ipblock_id = form.cleaned_data['ipblock']
+            num_to_create = form.cleaned_data['num_to_create']
+
+            # Do lots of permissions and existence checks - need a topology
+            # template and IP block
+            try:
+                template = db.TopologyTemplate.objects.get(pk=template_id)
+            except db.TopologyTemplate.DoesNotExist:
+                messages.error(request, "No such template")
+                return direct_to_template(request, tn, { 'form': form,
+                                                         'group': group})
+
+            try:
+                ipblock = db.IPBlock.objects.get(pk=ipblock_id)
+            except db.IPBlock.DoesNotExist:
+                messages.error(request, "No such IP block")
+                return direct_to_template(request, tn, { 'form': form,
+                                                         'group': group})
+
+            if not permissions.allowed_topologytemplate_access_use(request.user, template):
+                messages.error(request, "You cannot create topologies from this template")
+                return direct_to_template(request, tn, { 'form': form,
+                                                         'group': group})
+            
+            if not permissions.allowed_ipblock_access_use(request.user, ipblock):
+                messages.error(request, "You cannot create topologies in this IP block")
+                return direct_to_template(request, tn, { 'form': form,
+                                                         'group': group})
+
+            if num_to_create > 30:
+                messages.error(request, "You cannot create >30 topologies at once")
+                return direct_to_template(request, tn, { 'form': form,
+                                                         'group': group})
+            # Get a list of users
+            try:
+                users = User.objects.filter(groups=group)
+            except User.DoesNotExist:
+                messages.error("No users in this group to create topologies for")
+                return HttpResponseRedirect("/")
+
+            # Otherwise, we're good to actually create the topologies, subject
+            # to permissions checks on each user.
+            # These variables track the number with permissions errors, the
+            # number successfully created and the number rwith other errors
+            # to report to the user.
+            num_perms = 0
+            num_created = 0
+            num_errs = 0
+            for u in users:
+                
+                # Check we have permission to change this user
+                if not permissions.allowed_user_access_change(request.user, u):
+                    num_perms += 1
+                    continue
+
+                # Create the topology
+                err,_,_,_ = instantiate_template(org=u.get_profile().org,
+                                                 owner=u,
+                                                 template=template,
+                                                 ip_block_from=ipblock,
+                                                 src_filters=[],
+                                                 temporary=False)
+                
+                # Update the numbers with/without errors
+                if err is not None:
+                    num_errs += 1
+                else:
+                    num_created += 1
+
+            # Report to the user
+            topology_create_message(request, num_errs, num_perms, num_created)
+            return HttpResponseRedirect('/group/%s/' % gn)
+
+        else:
+            # The form is not valid
+            messages.error(request, "Invalid form")
+            return direct_to_template(request, tn, {'form':form,
+                                                    'group':group})
+
+    else:
+        # request.method != 'POST'
+        # Need to give them a form but do nothing else
+        return direct_to_template(request, tn, {'form':CreateTopologyForm(),
+                                                'group':group})
+
+def topology_create_message(request, num_errs, num_perms, num_created):
+    """Create and show a message describing any error conditions"""
+    # Note that the case num_perms == num_errs == num_created == 0
+    # cannot occur, because users is guaranteed to have at least one entry
+    if num_perms == 0 and num_errs == 0:
+        messages.success(request, "Successfully created %d topologies." % num_created)
+    elif num_created == 0 and num_errs == 0:
+        messages.error(request, "You did not have permission to create "
+                       "topologies for %d users.  No topologies have "
+                       "been created." % num_perms)
+    elif num_created == 0 and num_perms == 0:
+        messages.error(request, "There were errors creating topologies "
+                       "for %d users.  No topologies have been created."
+                       % num_errs)
+    elif num_created == 0:
+        messages.error(request, "You do not have permission to create "
+                       "topologies for %d users, and there were "
+                       "unknown errors creating topologies for %d "
+                       "users.  No topologies have been created."
+                       % (num_perms, num_errs))
+    elif num_perms == 0:
+        messsages.info(request, "There were errors creating topologies "
+                       "for %d users but %d topologies were still "
+                       "created successfully." % (num_errs, num_created))
+        
+    elif num_errs == 0:
+        messages.info(request, "You do not have permission to create "
+                      "topologies for %d users, but %d topologies for "
+                      "other users were created successfully." % 
+                      (num_perms, num_created))
+    else:
+        messages.info(request, "%d topologies were successfully "
+                      "created, %d had permissions errors and %d had "
+                      "other errors." % (num_created, num_perms,
+                                         num_errs)
+                      )

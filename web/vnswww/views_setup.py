@@ -49,7 +49,7 @@ def setup(request):
 
     if not request.user.is_superuser:
         messages.info(request, "Logon to set up VNS")
-        return HttpResponseRedirect('/login/')
+        return HttpResponseRedirect('/login/?next=/setup/')
     
     if request.method == 'POST':
         form = SetupForm(request.POST)
@@ -97,6 +97,11 @@ def setup(request):
             up.org = org
             up.generate_and_set_new_sim_auth_key()
             up.save()
+
+            # Set the user's name
+            request.user.first_name = first_name
+            request.user.last_name = last_name
+            request.user.save()
 
             # Create a simulator
             sim = db.Simulator()

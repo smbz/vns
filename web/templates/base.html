@@ -27,9 +27,12 @@
               <tr>
                  <td><a href="/topologies/">Topologies</a></td>
               </tr>
-	      <tr>
-		 <td><a href="/templates/">Templates</a></td>
-	      </tr>
+              <tr>
+                 <td><a href="/templates/">Templates</a></td>
+              </tr>
+              <tr>
+                 <td><a href="/groups/">Groups</a></td>
+              </tr>
               {% if user.is_authenticated %}
               <tr>
                  <td><a href="/user/{{ user.username }}/">Your Profile</a></td>
@@ -47,16 +50,19 @@
                   <td>&nbsp;<br/><h2>Actions</h2></td>
               </tr>
 	      {% endif %}
-              {% if user.get_profile.can_create_topology %}
+          {% if user.get_profile.can_create_topology %}
               <tr>
                   <td><a href="/topology/create/">Create Topology</a></td>
               </tr>
 	      {% endif %}
 	      {% if user.get_profile.can_create_user %}
-	      <tr>
+              <tr>
                   <td><a href="/user/create/">Create User</a></td>
               </tr>
-              {% endif %}
+              <tr>
+                  <td><a href="/group/create/">Create Group</a></td>
+              </tr>
+          {% endif %}
 	      {% if user.get_profile.can_create_topologytemplate %}
 	      <tr>
 		  <td><a href="/template/create/">Create Template</a></td>

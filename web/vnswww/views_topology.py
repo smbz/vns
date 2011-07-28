@@ -28,7 +28,7 @@ def make_ctform(user):
 
 def topology_create(request):
     # make sure the user is logged in
-    if not request.user.has_perm("vnswww.add_topology"):
+    if not permissions.allowed_topology_access_create(request.user):
         messages.info("Please login as a user who is permitted to create topologies.")
         return HttpResponseRedirect('/login/?next=/topology/create/')
 
@@ -44,21 +44,26 @@ def topology_create(request):
             try:
                 template = db.TopologyTemplate.objects.get(pk=template_id)
             except db.TopologyTemplate.DoesNotExist:
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'invalid template' })
+                messages.error(request, "No such template")
+                return direct_to_template(request, tn, { 'form': form })
 
             try:
                 ipblock = db.IPBlock.objects.get(pk=ipblock_id)
             except db.IPBlock.DoesNotExist:
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'invalid IP block'})
+                messages.error(request, "No such IP block")
+                return direct_to_template(request, tn, { 'form': form })
 
             if not permissions.allowed_topologytemplate_access_use(request.user, template):
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create topologies from this template' })
+                messages.error(request, "You cannot create topologies from this template")
+                return direct_to_template(request, tn, { 'form': form })
             
             if not permissions.allowed_ipblock_access_use(request.user, ipblock):
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create topologies in this IP block' })
+                messages.error(request, "You cannot create topologies in this IP block")
+                return direct_to_template(request, tn, { 'form': form })
 
             if num_to_create > 30:
-                return direct_to_template(request, tn, { 'form': form, 'more_error': 'you cannot create >30 topologies at once' })
+                messages.error(request, "You cannot create >30 topologies at once")
+                return direct_to_template(request, tn, { 'form': form })
 
             # TODO: should validate that request.user can use the requested
             #       template and IP block
