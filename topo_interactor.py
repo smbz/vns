@@ -47,7 +47,7 @@ Connects to the VNS Topology Interaction service."""
     try:
         fp = open(options.auth_key_file, 'r')
         auth_key = fp.read()
-        auth_key = auth_key[:len(auth_key)-1] # remove trailing \n
+        auth_key = auth_key.strip() # remove trailing \n
         fp.close()
     except IOError, e:
         print 'Unable to load authentication key from %s: %s' % (options.auth_key_file, e)

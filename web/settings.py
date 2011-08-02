@@ -69,6 +69,8 @@ LOGIN_REDIRECT_URL = '/topologies/'
 LOGIN_URL = '/login/'
 MESSAGE_STORAGE = 'django.contrib.messages.storage.cookie.CookieStorage'
 
+AUTHENTICATION_BACKENDS = ('pyroven.pyroven_django.RavenAuthBackend',
+                           'django.contrib.auth.backends.ModelBackend')
 
 # Load implementation-specific setting from /etc/vns/django.ini
 cfg = RawConfigParser()

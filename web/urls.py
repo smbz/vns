@@ -9,6 +9,7 @@ from vnswww.views import checked_delete, homepage
 from vnswww.views_doc import *
 from vnswww.views_group import *
 from vnswww.views_org import *
+from vnswww.views_raven import *
 from vnswww.views_setup import setup, setup_doc
 from vnswww.views_stats import stats_search
 from vnswww.views_topology import *
@@ -129,7 +130,9 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^group/(?P<gn>\w+)/deletetopo/?$',               group_topology_delete),
     (r'^doc/(?P<name>\w.*)?$',                          doc_view),
     (r'^setup/?$',                                      setup),
-    (r'^setup/doc/.*$',                                 setup_doc)
+    (r'^setup/doc/.*$',                                 setup_doc),
+    (r'^ravenreturn/?$',                                raven_return),
+    (r'^ravenlogin/?$',                                 raven_login)
 )
 
 urlpatterns += patterns('',
