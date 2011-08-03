@@ -1,0 +1,231 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   version="1.1"
+   width="600.47614"
+   height="474.64847"
+   id="svg2">
+  <defs
+     id="defs4">
+    <linearGradient
+       id="linearGradient5146">
+      <stop
+         id="stop5148"
+         style="stop-color:#000000;stop-opacity:1"
+         offset="0" />
+      <stop
+         id="stop5154"
+         style="stop-color:#000000;stop-opacity:0.65789473"
+         offset="0.58333331" />
+      <stop
+         id="stop5150"
+         style="stop-color:#000000;stop-opacity:0"
+         offset="1" />
+    </linearGradient>
+    <marker
+       refX="0"
+       refY="0"
+       orient="auto"
+       id="Arrow1Lend"
+       style="overflow:visible">
+      <path
+         d="M 0,0 5,-5 -12.5,0 5,5 0,0 z"
+         transform="matrix(-0.8,0,0,-0.8,-10,0)"
+         id="path3941"
+         style="fill-rule:evenodd;stroke:#000000;stroke-width:1pt;marker-start:none" />
+    </marker>
+  </defs>
+  <metadata
+     id="metadata7">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     transform="translate(-125.08809,-148.58211)"
+     id="layer1">
+    <g
+       transform="translate(14.849243,-2.8284272)"
+       id="g3895">
+      <rect
+         width="112.29465"
+         height="34.580894"
+         x="541.15588"
+         y="225.90018"
+         id="rect2987"
+         style="fill:#ffffff;stroke:#000000;stroke-width:1.03433752;stroke-opacity:1" />
+      <text
+         x="551.64435"
+         y="248.17973"
+         id="text3757"
+         xml:space="preserve"
+         style="font-size:24px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+           x="551.64435"
+           y="248.17973"
+           id="tspan3759"
+           style="font-size:16px">Web server</tspan></text>
+      <text
+         x="556.24261"
+         y="275.64395"
+         id="text3768"
+         xml:space="preserve"
+         style="font-size:20px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+           x="556.24261"
+           y="275.64395"
+           id="tspan3770"
+           style="font-size:12px">128.232.28.1</tspan></text>
+    </g>
+    <g
+       transform="translate(149.19953,-1.4142136)"
+       id="g3888">
+      <rect
+         width="90.509949"
+         height="30.372894"
+         x="16.085632"
+         y="227.29706"
+         id="rect3772"
+         style="fill:#ffffff;stroke:#000000;stroke-width:0.9996928;stroke-opacity:1" />
+      <text
+         x="25.455845"
+         y="247.67467"
+         id="text3774"
+         xml:space="preserve"
+         style="font-size:24px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+           x="25.455845"
+           y="247.67467"
+           id="tspan3776"
+           style="font-size:16px">Gateway</tspan></text>
+      <text
+         x="19.947754"
+         y="274.17383"
+         id="text3768-8"
+         xml:space="preserve"
+         style="font-size:20px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+           x="19.947754"
+           y="274.17383"
+           id="tspan3770-3"
+           style="font-size:12px">128.232.32.2</tspan></text>
+    </g>
+    <path
+       d="m 330.21886,259.69548 c 69.29646,24.74874 74.24622,203.64675 74.24622,203.64675"
+       id="path3840"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <path
+       d="m 494.26764,256.86706 c -70.71068,15.55635 -79.19596,206.47518 -79.19596,206.47518"
+       id="path3842"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1" />
+    <rect
+       width="158.39192"
+       height="33.234013"
+       x="332.34021"
+       y="465.46359"
+       id="rect3844"
+       style="fill:#ffffff;stroke:#000000;stroke-opacity:1" />
+    <path
+       d="m 630.66818,242.72491 a 299.0351,94.045212 0 1 1 -598.070188,0 299.0351,94.045212 0 1 1 598.070188,0 z"
+       transform="translate(94.095454,0.70710632)"
+       id="path3852"
+       style="fill:none;stroke:#000000;stroke-width:1.60000002;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:1.6, 3.2;stroke-dashoffset:0" />
+    <path
+       d="m 630.73926,242.72491 a 299.10617,86.267036 0 1 1 -598.212343,0 299.10617,86.267036 0 1 1 598.212343,0 z"
+       transform="translate(93.338089,293.44932)"
+       id="path3852-6"
+       style="fill:none;stroke:#000000;stroke-width:1.60000002;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:1.6, 3.2;stroke-dashoffset:0" />
+    <g
+       transform="translate(101.11627,-1.4142136)"
+       id="g3908">
+      <rect
+         width="167.21062"
+         height="33.130375"
+         x="228.02675"
+         y="225.21121"
+         id="rect3902"
+         style="fill:#ffffff;stroke:#000000;stroke-width:1.07061386;stroke-opacity:1" />
+      <text
+         x="237.58789"
+         y="247.66928"
+         id="text3904"
+         xml:space="preserve"
+         style="font-size:18px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+           x="237.58789"
+           y="247.66928"
+           id="tspan3906"
+           style="font-size:16px">Virtual node (hub)</tspan></text>
+    </g>
+    <text
+       x="340.82547"
+       y="488.09097"
+       id="text3917"
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+         x="340.82547"
+         y="488.09097"
+         id="tspan3919">Your hub program</tspan></text>
+    <rect
+       width="128.69344"
+       height="32.526924"
+       x="175.36249"
+       y="512.83972"
+       id="rect3921"
+       style="fill:none;stroke:#000000;stroke-width:1.10000002;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:0" />
+    <text
+       x="185.26199"
+       y="534.76001"
+       id="text3923"
+       xml:space="preserve"
+       style="font-size:16px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"><tspan
+         x="185.26199"
+         y="534.76001"
+         id="tspan3925">Web browser</tspan></text>
+    <path
+       d="M 207.18229,510.01128 C 132.93607,391.92445 202.93965,275.95894 202.93965,275.95894"
+       id="path3927"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)" />
+    <path
+       d="m 258.09398,221.51171 c 28.99137,-16.26345 63.63961,-4.24264 63.63961,-4.24264"
+       id="path3929"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)" />
+    <path
+       d="m 364.8671,261.1097 c 28.28427,31.11269 41.7193,118.08683 41.7193,118.08683"
+       id="path3931"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)" />
+    <path
+       d="M 416.48589,377.78231 C 417.193,310.60717 448.3057,265.35233 448.3057,265.35233"
+       id="path3933"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)" />
+    <text
+       x="344.41125"
+       y="177.6711"
+       id="text4925"
+       xml:space="preserve"
+       style="font-size:24px;font-style:normal;font-weight:bold;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans Bold"><tspan
+         x="344.41125"
+         y="177.6711"
+         id="tspan4927">VNS server</tspan></text>
+    <text
+       x="315.05341"
+       y="597.9436"
+       id="text4925-7"
+       xml:space="preserve"
+       style="font-size:24px;font-style:normal;font-weight:bold;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans;-inkscape-font-specification:Sans Bold"><tspan
+         x="315.05341"
+         y="597.9436"
+         id="tspan4927-1">Your workstation</tspan></text>
+    <path
+       d="m 497.80317,220.0975 c 25.45585,-10.6066 53.03301,0 53.03301,0"
+       id="path4950"
+       style="fill:none;stroke:#000000;stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;stroke-opacity:1;marker-end:url(#Arrow1Lend)" />
+  </g>
+</svg>
