@@ -208,11 +208,21 @@ def user_renew_auth_key(request, up):
     return HttpResponseRedirect("/user/%s/" % up.user.username)
 
 def user_delete(request, up, **kwargs):
+
+    # Mark the user as retired
     user = up.user
     un = user.username
     on = up.org.name
     up.retired = True
     up.save()
+
+    # Insert journal entries to delete their topologies - the main VNS process
+    # will delete them if it is safe
+    for t in db.Topology.objects.filter(owner=up.user):
+        je = db.JournalTopologyDelete()
+        je.topology = t
+        je.save()
+
     messages.success(request, mark_safe("You have successfully deleted %s.  (<a href=\"/user/%s/undelete/\">undo</a>)" % (un,un)))
     return HttpResponseRedirect('/org/%s/' % on)
 
@@ -222,7 +232,11 @@ def user_undelete(request, up, **kwargs):
     on = up.org.name
     up.retired = False
     up.save()
-    messages.success(request, "You have successfully restored %s." % un)
+
+    # Attempt to remove any pending topology deletions
+    db.JournalTopologyDelete.objects.filter(topology__owner=up.user).delete()
+    
+    messages.success(request, "You have successfully restored %s; some of their topologies may not have been recovered." % un)
     return HttpResponseRedirect('/org/%s/' % on)
 
 def user_profile(request, up):

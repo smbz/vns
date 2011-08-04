@@ -49,3 +49,7 @@ def topolink(topo):
 @register.filter(name='templatelink')
 def templatelink(template):
     return mark_safe('<a href="/template%d/">%s</a>' % (template.id, template.name))
+
+@register.filter(name='grouplink')
+def grouplink(group):
+    return mark_safe('<a href="/org/%s/%s/">%s</a>' % (group.org.name, group.name, group.name))

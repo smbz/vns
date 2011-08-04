@@ -10,38 +10,124 @@ from vns.AddressAllocation import instantiate_template
 import models as db
 import permissions
 
-def group_view(request, gn):
+def group_access_check(request, callee, action, **kwargs):
+    """Checks that the user can access the functions they're trying to, and
+    if they can calls callee.
+    @param request  An HTTP request
+    @param callee  Gives the Callable to call
+    @param action  One of "add", "change", "use", "delete", describing the
+    permissions needed
+    @param gid  The ID of the group in question; not used for
+    action = "add"
+    @exception ValueError  If an action is unrecognised
+    @exception KeyError  If an option is missing
+    @return HttpResponse"""
+
+    def denied():
+        """Generate an error message and redirect if we try do something to a
+        group we're not allowed to"""
+        messages.error(request, "Either this group doesn't exist or you don't "
+                                "have permission to %s it." % action)
+        return HttpResponseRedirect('/login/')
+
+    def denied_add():
+        """Generate an error message and redirect if we try to create a group
+        and are not allowed to"""
+        messages.error(request, "You don't have permission to create groups.")
+        return HttpResponseRedirect('/login/')
+
+    
+    # If we're trying to add a group, don't need to get the group itself
+    if action == "add":
+        if permissions.allowed_group_access_create(request.user):
+            return callee(request)
+        else:
+            return denied_add()
+
+    else:
+
+        # Try getting the group - if it doesn't exist, show the same message
+        # as for permission denied.  If we don't have org / group name
+        # arguments, django will show an internal error, which is what we want.
+        gn = kwargs['gn']
+        on = kwargs['on']
+        try :
+            group = db.Group.objects.get(org__name=on, name=gn)
+        except db.Group.DoesNotExist:
+            return denied()
+
+        if action == "use":
+            if permissions.allowed_group_access_use(request.user, group):
+                 return callee(request, group=group, **kwargs)
+            else:
+                return denied()
+        elif action == "change":
+            if permissions.allowed_group_access_change(request.user, group):
+                return callee(request, group=group, **kwargs)
+            else:
+                return denied()
+        elif action == "delete":
+            if permissions.allowed_group_access_delete(request.user, group):
+                return callee(request, group=group, **kwargs)
+            else:
+                return denied()
+        else:
+            raise ValueError("Unknown action: %s" % options["action"])
+
+
+def group_list(request, on=None):
+    """View a list of groups; doesn't show groups which are not visible to the
+    user making the request.  Note that both the group name and the organization
+    are needed to specify the group uniquely.
+    @param request An HttpRequest
+    @param on  The name of the organization for which to show groups"""
+    
+    # The name of the template to view the list through
+    tn = 'vns/groups.html'
+
+    if on is not None:
+        # Get the organization from the database
+        try:
+            org = db.Organization.objects.get(name=on)
+        except db.Organization.DoesNotExist:
+            messages.error(request, "No such organization: %s" % on)
+            return HttpResponseRedirect('/organizations/')
+
+        # Get a list of groups
+        groups = list(db.Group.objects.filter)
+
+    else:
+        # on is None - we want all groups
+        groups = list(db.Group.objects.all())
+
+    # Filter the list so that we only see groups we're allowed to
+    pred = lambda g: permissions.allowed_group_access_use(request.user, g)
+    groups = filter(pred, groups)
+
+    # Give the groups to a template to display
+    return direct_to_template(request, tn, {'groups':groups})
+
+
+def group_view(request, group, **kwargs):
     """View a list of users in a group.  Does not show users that are not
     visible to the user making the request.
     @param request  An HttpRequest
-    @oaram gn  The name of the group to view
+    @oaram group  The group to view
     @return HttpResponse"""
 
     tn='vns/group_view.html'
 
-    # Check this isn't a built-in group
-    if gn in db.UserProfile.GROUPS.values():
-        messages.error(request, "You cannot view built-in groups.")
-        return HttpResponseRedirect("/groups/")
-
     if not request.user.is_authenticated():
         return HttpResponseRedirect('/login/')
-
-    # Find the group
-    try:
-        group = Group.objects.get(name=gn)
-    except Group.DoesNotExist:
-        messages.error(request, "Group %s does not exist." % gn)
-        return HttpResponseRedirect("/groups/")
 
     # Find the user profiles in this group which the user is allowed to see
     try:
         users = permissions.get_allowed_users(request.user)
-        users = users.filter(user__groups=group)
+        users = users.filter(user__vns_groups=group)
     except User.DoesNotExist:
         messages.info(request, "There are no users in group %s which you "
                        "can view." % gn)
-        return HttpResponseRedirect("/groups/")
+        return HttpResponseRedirect("/%s/groups/" % request.user.org.name)
 
     # Find the user profiles which this user is allowed to delete
     l = lambda up: permissions.allowed_user_access_delete(request.user, up.user)
@@ -67,7 +153,7 @@ class UserGroupError(UserError):
 class UserPermissionError(UserError):
     pass
 
-def insert_users(user, users, group_name, pos):
+def insert_users(user, users, group_name, pos, org, finger_server=None, email_suffix=None):
     """Inserts user into the database.  If an exception is raised, no changes
     are made to the DB.
     @param users  A string listing users, one per line, whitespace-
@@ -77,6 +163,7 @@ def insert_users(user, users, group_name, pos):
     @param group_name  The name of the group to add the users to - empty or None
     implies no group
     @param pos  An int giving the position of the new users
+    @param org  An Organization to which the group and users will belong
     @exception UserSyntaxError if there is a syntax error in users
     @exception UserGroupError if a group by that name already exists
     @exception UserUserError if a user by that name already exists
@@ -86,27 +173,29 @@ def insert_users(user, users, group_name, pos):
     include_group = group_name != "" and group_name != None
 
     userlist = []
-    
+
+    # Parse the lines and add the user details to userlist
     lines = users.splitlines()
     for i,l in enumerate(lines):
         l = l.strip()
         if l == "" or l.startswith("#"):
             continue
         
-        toks = l.split(None, 3)
-        if len(toks) < 4:
-            raise UserSyntaxError("Syntax error on line %d: too few tokens")
-        username = toks[0]
-        email = toks[1]
-        firstname = toks[2]
-        lastname = toks[3]
+        toks = l.split(',')
+        if len(toks) != 4:
+            raise UserSyntaxError("Syntax error on line %d: expected a line of "
+                                  "the form <username>, <email>, <firstname>, <lastname>")
+        username = toks[0].strip()
+        email = toks[1].strip()
+        firstname = toks[2].strip()
+        lastname = toks[3].strip()
         userlist.append( (username, email, firstname, lastname) )
 
     # Check that the group doesn't exist
     if include_group:
         try:
-            group = Group.objects.get(name=group_name)
-        except Group.DoesNotExist:
+            _ = db.Group.objects.get(name=group_name, org=user.get_profile().org)
+        except db.Group.DoesNotExist:
             pass
         else:
             raise UserGroupError("Error: That group already exists")
@@ -128,18 +217,25 @@ def insert_users(user, users, group_name, pos):
             display_list += ", ..."
         raise UserUserError("Error: %d user(s) already exist: %s" % (len(existing_users), display_list))
 
+    # Check we can create users at this position and organization
+    if not permissions.allowed_user_access_create(user, pos, org):
+        raise UserPermissionError("Error: You do not have permission to create "
+                                  " that type of user at that organization.")
+
+    # Check that we can create groups at this organization
+    if not permissions.allowed_group_access_create(user, org):
+        raise UserPermissionError("Error: You do not have permission to create "
+                                  " groups at that organization.")
+
     # Add the group to the DB
     if include_group:
         try:
-            group = Group()
+            group = db.Group()
             group.name = group_name
+            group.org = org
             group.save()
         except IntegrityError:
             raise UserGroupError("Error: That group already exists")
-
-    if not permissions.allowed_user_access_create(user, pos, user.get_profile().org):
-        raise UserPermissionError("Error: You do not have permission to create "
-                                  " that type of user at that organization.")
 
     # Add the new users to the DB, since we haven't had any errors
     for (username, email, firstname, lastname) in userlist:
@@ -152,25 +248,39 @@ def insert_users(user, users, group_name, pos):
         pos_group = Group.objects.get(name=db.UserProfile.GROUPS[pos])
         new_user.groups.add(pos_group)
         if include_group:
-            new_user.groups.add(group)
+            new_user.vns_groups.add(group)
         
         # Create the user profile
         up = db.UserProfile()
         up.user = new_user
         up.pos = pos
-        up.org = user.get_profile().org
+        up.org = org
         up.generate_and_set_new_sim_auth_key()
 
         new_user.save()
         up.save()
 
 def make_group_add_form(user):
+    """Makes a form for use with group_add.  Only shows options which are
+    relevant to user's permissions.
+    @param user  The User who will be shown this form"""
     pos_choices = list(permissions.get_allowed_positions(user))
     class GroupAddForm(forms.Form):
         group_name = forms.CharField(label='Group name', max_length=30)
         pos = forms.ChoiceField(label='Position', choices=pos_choices)
-        users = forms.CharField(label='Users, e.g. fs123 fs123@example.com Fred Smith',
+        users = forms.CharField(label='Users, e.g. fs123,fs123@example.com,Fred,Smith',
                                 widget=forms.Textarea)
+
+        # See if we are allowed to create users at different organizations, and if
+        # we are, make a field for it
+        if permissions.allowed_user_access_create_different_org(user):
+
+            # Get a list of organizations
+            orgs = db.Organization.objects.all()
+            org_choices = [(o.name, o.name) for o in orgs]
+            org = forms.ChoiceField(label='Organization',
+                                    choices=org_choices)
+    
     return GroupAddForm
 
 def group_add(request):
@@ -183,17 +293,23 @@ def group_add(request):
     if request.method == 'POST':
         form = GroupAddForm(request.POST)
         if form.is_valid():
+
+            # Get form data which is guaranteed to be present
             group_name = form.cleaned_data['group_name']
             pos = form.cleaned_data['pos']
             users = form.cleaned_data['users']
 
-            # Check that the group is not a group with permissions
-            if group_name in db.UserProfile.GROUPS.values():
-                messages.error(request, "You cannot create a group called %s." % group_name)
+            # See if there is an organization field
+            try:
+                orgname = form.cleaned_data['org']
+                org = db.Organization.objects.get(name=orgname)
+            except KeyError:
+                # We didn't give the user an option for organization
+                org = request.user.org
 
             # Parse the list of users
             try:
-                insert_users(request.user, users, group_name, int(pos))
+                insert_users(request.user, users, group_name, int(pos), org)
             except UserError as e:
                 messages.error(request, str(e))
                 return HttpResponseRedirect('/group/create/')
@@ -209,27 +325,15 @@ def group_add(request):
         form = GroupAddForm()
         return direct_to_template(request, tn, {'form':form})
 
-def group_delete(request, gn):
+def group_delete(request, group, **kwargs):
     """Deletes all the users in a group that the user can delete.
     @param request  An HTTP request
-    @param gn  The name of the group to delete
+    @param group  The group to delete
     @return HttpResponse"""
-
-    # Check this isn't a built-in group
-    if gn in db.UserProfile.GROUPS.values():
-        messages.error(request, "You cannot delete built-in groups.")
-        return HttpResponseRedirect("/groups/")
-
-    # Get the group
-    try:
-        group = Group.objects.get(name=gn)
-    except Group.DoesNotExist:
-        messages.error(request, "This group does not exist")
-        return HttpResponseRedirect('/')
 
     # Get all users in the group
     try:
-        users = User.objects.filter(groups=group)
+        users = User.objects.filter(vns_groups=group)
     except User.DoesNotExist:
         group.delete()
         messages.error(request, "There are no users in this group")
@@ -249,7 +353,9 @@ def group_delete(request, gn):
             # Delete any topologies this user owns
             topos = db.Topology.objects.filter(owner=u)
             for t in topos:
-                t.delete()
+                je = db.JournalTopologyDelete()
+                je.topology = t
+                je.save()
         else:
             no_perms = True
 
@@ -263,32 +369,29 @@ def group_delete(request, gn):
     elif no_perms and has_deleted:
         messages.info(request, "Some users could not be deleted because of permissions.  Other users have been deleted.")
     else:
-        messages.success(request, "Successfully deleted group %s" % gn)
+        messages.success(request, "Successfully deleted group %s" % group.name)
 
     return HttpResponseRedirect('/')
 
-def group_topology_delete(request, gn):
+def group_topology_delete(request, group, **kwargs):
     """Delete any topologies owned by users in this group.
     @param request  An HttpRequest
-    @param gn  The name of the group to delete
+    @param group  The group to delete
     @return HttpResponse"""
 
-    # Check this isn't a built-in group
-    if gn in db.UserProfile.GROUPS.values():
-        messages.error(request, "You cannot change built-in groups.")
-        return HttpResponseRedirect("/groups/")
-
     # Get the group, users and topologies
-    group = Group.objects.get(name=gn)
-    users = User.objects.filter(groups=group)
+    users = User.objects.filter(vns_groups=group)
     topos = db.Topology.objects.filter(owner__in=users)
 
-    # Try to delete the topologies, with permissions checking
+    # Insert journal entries for the main VNS process to delete the topologies,
+    # subject to permissions checks
     no_perms = False
     has_deleted = False
     for t in topos:
         if permissions.allowed_topology_access_delete(request.user, t):
-            t.delete()
+            je = db.JournalTopologyDelete()
+            je.topology = t
+            je.save()
             has_deleted = True
         else:
             no_perms = True
@@ -299,39 +402,37 @@ def group_topology_delete(request, gn):
         return HttpResponseRedirect('/')
     elif no_perms and has_deleted:
         messages.info(request, "You do not have permissions to delete some of the topologies "
-                      "from this group, but some other topologies have been deleted.")
+                      "from this group, but some other topologies have been marked for deletion.")
         return HttpResponseRedirect('/')
     else:
-        messages.success(request, "Topologies for this group have been successfully deleted.")
+        messages.success(request, "Topologies for this group have been marked for deletion.")
         return HttpResponseRedirect('/')
 
-def group_topology_create(request, gn):
+def make_ctform(user):
+    user_org = user.get_profile().org
+    parent_org = user_org.parentOrg
+    template_choices = [(t.id, t.name) for t in permissions.get_allowed_templates(user)]
+    ipblock_choices = [(t.id, str(t)) for t in permissions.get_allowed_ipblocks(user)]
+    class CTForm(forms.Form):
+        template = forms.ChoiceField(label='Template', choices=template_choices)
+        ipblock = forms.ChoiceField(label='IP Block to Allocate From', choices=ipblock_choices)
+        num_to_create = forms.IntegerField(label='# to Create per User', initial='1')
+    return CTForm
+
+def group_topology_create(request, group, **kwargs):
     """Create topologies for a group, with each user in the group becoming the
     owner of one topology.
     @param request  An HttpRequest
-    @param gn  The name of the group to add the topologies for"""
+    @param group  The group to add the topologies for"""
 
     tn = "vns/group_topology_create.html"
-
-    # Check this isn't a built-in group
-    if gn in db.UserProfile.GROUPS.values():
-        messages.error(request, "You cannot change built-in groups.")
-        return HttpResponseRedirect("/groups/")
 
     # Check we're allowed to create topologies
     if not permissions.allowed_topology_access_create(request.user):
         messages.info("Please login as a user who is permitted to create topologies.")
         return HttpResponseRedirect('/login/?next=/topology/create/')
 
-    # Get the group
-    try:
-        group = Group.objects.get(name=gn)
-    except Group.DoesNotExist:
-        messages.error("No group %s" % gn)
-        return HttpResponseRedirect("/groups/")
-
     # Import a function to create the form
-    from views_topology import make_ctform
     CreateTopologyForm = make_ctform(request.user)
     
     if request.method == "POST":
@@ -367,13 +468,13 @@ def group_topology_create(request, gn):
                 return direct_to_template(request, tn, { 'form': form,
                                                          'group': group})
 
-            if num_to_create > 30:
-                messages.error(request, "You cannot create >30 topologies at once")
+            if num_to_create > 5:
+                messages.error(request, "You cannot create >5 topologies / user at once")
                 return direct_to_template(request, tn, { 'form': form,
                                                          'group': group})
             # Get a list of users
             try:
-                users = User.objects.filter(groups=group)
+                users = User.objects.filter(vns_groups=group)
             except User.DoesNotExist:
                 messages.error("No users in this group to create topologies for")
                 return HttpResponseRedirect("/")
@@ -394,22 +495,23 @@ def group_topology_create(request, gn):
                     continue
 
                 # Create the topology
-                err,_,_,_ = instantiate_template(org=u.get_profile().org,
-                                                 owner=u,
-                                                 template=template,
-                                                 ip_block_from=ipblock,
-                                                 src_filters=[],
-                                                 temporary=False)
+                for _ in range(0,num_to_create):
+                    err,_,_,_ = instantiate_template(org=u.get_profile().org,
+                                                     owner=u,
+                                                     template=template,
+                                                     ip_block_from=ipblock,
+                                                     src_filters=[],
+                                                     temporary=False)
                 
-                # Update the numbers with/without errors
-                if err is not None:
-                    num_errs += 1
-                else:
-                    num_created += 1
+                    # Update the numbers with/without errors
+                    if err is not None:
+                        num_errs += 1
+                    else:
+                        num_created += 1
 
             # Report to the user
             topology_create_message(request, num_errs, num_perms, num_created)
-            return HttpResponseRedirect('/group/%s/' % gn)
+            return HttpResponseRedirect('/org/%s/%s/' % (group.org.name, group.name))
 
         else:
             # The form is not valid

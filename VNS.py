@@ -206,6 +206,19 @@ class VNSSimulator:
         latest.value = str(int(time()))
         latest.save()
 
+        # see if there are any topologies to be deleted
+        for je in db.JournalTopologyDelete.objects.all():
+            try:
+                topo = self.topologies[je.topology.id]
+            except KeyError:
+                # this topology is not in use, we can just delete it from
+                # the db - this also deletes the journal entry
+                je.topology.delete()
+            else:
+                # the topology is in use; stop it and then delete it
+                self.stop_topology(topo, "topology has been deleted")
+                je.topology.delete()
+
         reactor.callLater(30, self.periodic_callback)
 
     def handle_packet_from_outside(self, packet):
@@ -319,7 +332,8 @@ class VNSSimulator:
                 topo.get_stats().finalize()
                 if topo.is_temporary():
                     AddressAllocation.free_topology(tid)
-                AddressAllocation.deallocate_from_topology(topo.t)
+                else:
+                    AddressAllocation.deallocate_from_topology(topo.t)
                 for ti_conn in topo.interactors:
                     self.terminate_ti_connection(ti_conn, 'GOODBYE: Topology %d has been shutdown' % tid)
 

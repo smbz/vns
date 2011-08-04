@@ -108,6 +108,7 @@ class UserProfile(Model):
             ("userprofile_delete_org", "Delete or mark as retired any user from same organization"),
             ("userprofile_use_any", "View the profile of any user"),
             ("userprofile_use_org", "View the profile of any user from the same organization"),
+            ("userprofile_create_different_org", "Create users at organizations other than own"),
         )
 
     SIM_KEY_SZ = 64 # size in bytes
@@ -810,7 +811,31 @@ class SystemInfo(Model):
     name = CharField(max_length=128, unique=True)
     value = TextField()
 
-
 class Doc(Model):
     name = CharField(max_length=128, unique=True, db_index=True)
     text = TextField()
+
+class Group(Model):
+    name = CharField(max_length=255, db_index=True)
+    users = ManyToManyField(User, related_name="vns_groups")
+    org = ForeignKey(Organization)
+    
+    class Meta:
+        unique_together = (("name", "org"),)
+        permissions = (
+            ("group_use_any", "View members of any group"),
+            ("group_view_org", "View members of any group from own organization"),
+            ("group_add_any", "Create new groups in any organization"),
+            ("group_add_org", "Create new groups in own organization"),
+            ("group_change_any", "Change membership any group"),
+            ("group_change_org", "Change membership of any group from own organization"),
+            ("group_delete_any", "Delete any group, but not necessarily its users"),
+            ("group_delete_org", "Delete any group from own organization, but "
+             "not necessarily its users"),
+        )
+
+class JournalTopologyDelete(Model):
+    """Solves the problem of deleting topologies while they're in use.  Anything
+    in this table marks a topology as needing to be deleted.  The VNS process,
+    rather than the web process, is then responsible for deleting it."""
+    topology = ForeignKey(Topology)

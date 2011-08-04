@@ -24,7 +24,7 @@ def allowed_user_access_create(user, pos=None, org=None):
         # If we're trying to create a user in a different organization and we're
         # not allowed to
         if org != user.get_profile().org:
-            if not user.has_perm("vnswww.userprofile_add_different_org"):
+            if not user.has_perm("vnswww.userprofile_create_different_org"):
                 return False
         try:
             return user.has_perm(db.UserProfile.PERMISSIONS[pos])
@@ -32,6 +32,11 @@ def allowed_user_access_create(user, pos=None, org=None):
             # If that type of user doesn't exist, they're not allowed to
             # create one
             return False
+
+def allowed_user_access_create_different_org(user):
+    """Returns True if the user can in principle create users at organizations
+    other than their own organization."""
+    return user.has_perm("vnswww.userprofile_create_different_org")
 
 def allowed_user_access_change(usera, userb):
     """Returns True if usera is allowed to change userb's profile, password, etc"""
@@ -98,12 +103,53 @@ def allowed_topologytemplate_access_use(user, template):
     @param user  The user who is trying to gain access
     @param topology  The template they're trying to gain access to"""
     return (template.visibility == db.TopologyTemplate.PUBLIC
-        or (template.visibility == db.TopologyTemplate.PROTECTED
+            or (template.visibility == db.TopologyTemplate.PROTECTED
                 and template.org == user.get_profile().org)
-        or template.owner == user
-        or user.has_perm("vnswww.topology_use_any")
-        or (user.has_perm("vnswww.topology_use_org")
+            or template.owner == user
+            or user.has_perm("vnswww.topology_use_any")
+            or (user.has_perm("vnswww.topology_use_org")
                 and template.org == user.get_profile().org))
+
+
+def allowed_group_access_use(user, group):
+    """Returns True if user is allowed read access to group, False otherwise
+    @param user  The user who is trying to gain access
+    @param group  The group they're trying to gain access to"""
+    return (user.has_perm("vnswww.group_use_any")
+            or (user.has_perm("vnswww.group_use_org")
+                and group.org == user.get_profile().org))
+
+def allowed_group_access_create(user, org=None):
+    """If org is None, returns whether user is in principle allowed to create
+    groups.  If org is an Organization, returns whether user is allowed to
+    create groups at that organization.
+    @param user  The user who is trying to create a group
+    @param org  The Organization they're trying to create the group for"""
+    if org is None:
+        return (user.has_perm("vnswww.group_add_any")
+                or user.has_perm("vnswww.group_add_org"))
+    else:
+        return (user.has_perm("vnswww.group_add_any")
+                or (user.has_perm("vnswww.group_add_org")
+                    and org == user.get_profile().org))
+
+def allowed_group_access_change(user, group):
+    """Returns True if user is allowed to add/remove users to/from group, False
+    otherwise
+    @param user  The user who is trying to gain access
+    @param group  The group they're trying to add/remove users to/from"""
+    return (user.has_perm("vnswww.group_change_any")
+            or (user.has_perm("vnswww.group_change_org")
+                and group.org == user.get_profile().org))
+
+def allowed_group_access_delete(user, group):
+    """Returns True if user is allowed to delete group, False otherwise.  Note
+    that this does NOT mean user is allowed to delete users in the group.
+    @param user  The user who is trying to gain access
+    @param group  The group they're trying to gain access to"""
+    return (user.has_perm("vnswww.group_delete_any")
+            or (user.has_perm("vnswww.group_delete_org")
+                and group.org == user.get_profile().org))
 
 
 def allowed_organization_access_use(user, org):

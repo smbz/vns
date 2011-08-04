@@ -3,7 +3,8 @@ from models import Simulator, Organization, UserProfile, UsageStats, \
                    TopologyTemplate, Node, WebServer, WebServerPath, Port, Link, \
                    Topology, TopologySourceIPFilter, \
                    IPAssignment, MACAssignment, IPBlock, IPBlockAllocation, \
-                   RecentIPBlockAllocation, SystemInfo, Doc
+                   RecentIPBlockAllocation, SystemInfo, Doc, Group, \
+                   JournalTopologyDelete
 
 def make_user_search_fields(prefix):
     return (prefix + '__username', prefix + '__first_name', prefix + '__last_name')
@@ -110,6 +111,16 @@ class DocAdmin(admin.ModelAdmin):
     ordering = ('name',)
     search_fields = ('name', 'text')
 
+class GroupAdmin(admin.ModelAdmin):
+    list_display = ('name', 'org')
+    ordering = ('org', 'name')
+    search_fields = ('org', 'name')
+
+class JournalTopologyDeleteAdmin(admin.ModelAdmin):
+    list_display = ('topology',)
+    ordering = ('topology',)
+    search_fields = ('topology',)
+
 admin.site.register(Simulator, SimulatorAdmin)
 admin.site.register(Organization, OrganizationAdmin)
 admin.site.register(UserProfile, UserProfileAdmin)
@@ -130,3 +141,5 @@ admin.site.register(RecentIPBlockAllocation, RecentIPBlockAllocationAdmin)
 admin.site.register(UsageStats, UsageStatsAdmin)
 admin.site.register(SystemInfo, SystemInfoAdmin)
 admin.site.register(Doc, DocAdmin)
+admin.site.register(Group, GroupAdmin)
+admin.site.register(JournalTopologyDelete, JournalTopologyDeleteAdmin)

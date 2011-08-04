@@ -322,8 +322,10 @@ def topology_permitted_sip_remove(request, tid, topo, sn):
     return HttpResponseRedirect('/topology%d/' % tid)
 
 def topology_delete(request, tid, topo, **kwargs):
-    topo.delete()
-    messages.success(request, 'Topology %d has been deleted.' % tid)
+    je = db.JournalTopologyDelete()
+    je.topology = topo
+    je.save()
+    messages.success(request, 'Topology %d has been marked for deletion.' % tid)
     return HttpResponseRedirect('/topologies/')
 
 def topology_readme(request, tid, topo):

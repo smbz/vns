@@ -6,10 +6,10 @@
 
 {% block content %}
     <p>
-    <a href="/group/{{ group.name }}/delete/">Delete all users in this group</a><br/>
+    <a href="/org/{{ group.org.name }}/{{ group.name }}/delete/">Delete all users in this group</a><br/>
     {% if users %}
-	<a href="/group/{{ group.name }}/createtopo/">Create a topology for all users in this group</a><br/>
-	<a href="/group/{{ group.name }}/deletetopo/">Delete topologies owned by all users in this group</a><br/>
+	<a href="/org/{{ group.org.name }}/{{ group.name }}/createtopo/">Create a topology for all users in this group</a><br/>
+	<a href="/org/{{group.org.name }}/{{ group.name }}/deletetopo/">Delete topologies owned by all users in this group</a><br/>
 	</p>
     <table>
         <tr>
