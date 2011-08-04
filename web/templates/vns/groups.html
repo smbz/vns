@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Groups{% endblock %}
+{% block title %}User Groups{% endblock %}
+
+{% block content %}
+    {% if groups %}
+    <table>
+        <tr>
+            <th>Organization</th>
+            <th>Name</th>
+            <th># of Users</th>
+        </tr>
+    {% endif %}
+    {% for group in groups %}
+        <tr>
+		    <td>{{ group.org|orglink }}</a>
+            <td>{{ group|grouplink }}</td>
+            <td>{{ group.users.count }}</td>
+        </tr>
+    {% empty %}
+        <p>There are no groups at this time</p>
+    {% endfor %}
+    {% if groups %}
+    </table>
+    {% endif %}
+{% endblock %}

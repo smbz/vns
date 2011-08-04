@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Instantiate Topologies for Group{% endblock %}
+{% block title %}Instantiate Topologies for Group '{{ group.name }}'{% endblock %}
+
+{% block content %}
+    {% if form %}
+        <form action="/org/{{ group.org.name }}/{{ group.name }}/createtopo/" method="post">
+        {{ form.as_p }}
+        <input type="submit" value="Create topologies" />
+        </form>
+    {% else %}
+        <a href="/topologies/">View topologies</a>
+    {% endif %}
+{% endblock %}
