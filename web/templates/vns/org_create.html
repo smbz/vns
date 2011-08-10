@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Create Organization{% endblock %}
+{% block title %}Create Organization{% endblock %}
+
+{% block content %}
+    {% if form %}
+        <form action="/org/create/" method="post">
+        <table>
+        {{ form.as_table }}
+        <tr><td colspan="2" style="text-align:center"><input type="submit" value="Create organization" /></td></tr>
+        </table>
+        </form>
+    {% else %}
+        <a href="/organizations/">View organizations</a>
+    {% endif %}
+{% endblock %}
