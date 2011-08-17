@@ -8,8 +8,10 @@ DEBUG = TEMPLATE_DEBUG = True
 ADMINS = []
 MANAGERS = ADMINS
 EMAIL_HOST = ''
+EMAIL_PORT = 25
 SEND_BROKEN_LINK_EMAILS = True
 SERVER_EMAIL = ''
+DEFAULT_FROM_EMAIL = ''
 
 PROJECT_PATH = os.path.abspath(os.path.dirname(__file__))
 
@@ -47,6 +49,7 @@ MIDDLEWARE_CLASSES = (
 TEMPLATE_CONTEXT_PROCESSORS = (
     'django.core.context_processors.auth',
     'django.contrib.messages.context_processors.messages',
+    'web.vnswww.templatetags.context_processors.server_email',
 )
 
 ROOT_URLCONF = 'web.urls'
@@ -92,6 +95,7 @@ except NoOptionError, NoSectionError:
 
 try:
     SERVER_EMAIL = cfg.get("email", "address")
+    DEFAULT_FROM_EMAIL = cfg.get("email", "address")
 except NoOptionError, NoSectionError:
     pass
 

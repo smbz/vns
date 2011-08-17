@@ -75,6 +75,7 @@ dict_topologytemplate_create      = make_access_check_dict(topologytemplate_crea
 dict_topologytemplate_delete      = make_access_check_dict(topologytemplate_spec, "delete")
 
 # dictionaries which specify access requirements for various organization views
+dict_org_create      = make_access_check_dict(org_create, "add")
 dict_org_users      = make_access_check_dict(org_users, "use")
 
 # dictionaries which specify access requirements for various group views
@@ -94,6 +95,7 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^summary/?$',                                    list_detail.object_list, summary_info),
     (r'^vns[.]css$',                                    direct_to_template, {'mimetype':'text/css', 'template':'vns.css'}),
     (r'^organizations/?$',                              list_detail.object_list, organizations_info),
+    (r'^org/create/?$',                                 org_access_check, dict_org_create),
     (r'^org/(?P<on>[^/]+)/?$',                          org_access_check, dict_org_users),
     (r'^topologies/?$',                                 topologies_list),
     (r'^topology/create/?$',                            topology_access_check, dict_topology_create),
@@ -128,7 +130,7 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^org/(?P<on>[^/]+)/(?P<gn>\w+)/deletetopo/?$',   group_access_check, dict_group_topology_delete),
     (r'^doc/(?P<name>\w.*)?$',                          doc_view),
     (r'^setup/?$',                                      setup),
-    (r'^setup/doc/?$',                                 setup_doc),
+    (r'^setup/doc/?$',                                  setup_doc),
     (r'^ravenreturn/?$',                                raven_return),
     (r'^ravenlogin/?$',                                 raven_login)
 )

@@ -48,8 +48,6 @@ class Organization(Model):
     """An institution to which a group of users belong (or a sub-group)."""
     name = CharField(max_length=30, unique=True, verbose_name="Name")
     parentOrg = ForeignKey('self', null=True, blank=True)
-    boss = ForeignKey(User, related_name='org_boss_id',
-                      help_text='User with complete control of 1this organization.')
     admins = ManyToManyField(User, null=True, blank=True)
 
     class Meta:
@@ -185,6 +183,12 @@ class UserProfile(Model):
 
     def can_delete_user(self, up):
         return permissions.allowed_user_access_delete(self.user, up.user)
+
+    def can_create_group(self):
+        return permissions.allowed_group_access_create(self.user)
+
+    def can_create_organization(self):
+        return permissions.allowed_organization_access_create(self.user)
         
 
 class TopologyTemplate(Model):
@@ -824,7 +828,7 @@ class Group(Model):
         unique_together = (("name", "org"),)
         permissions = (
             ("group_use_any", "View members of any group"),
-            ("group_view_org", "View members of any group from own organization"),
+            ("group_use_org", "View members of any group from own organization"),
             ("group_add_any", "Create new groups in any organization"),
             ("group_add_org", "Create new groups in own organization"),
             ("group_change_any", "Change membership any group"),

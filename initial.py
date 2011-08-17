@@ -34,7 +34,11 @@ INSTRUCTOR_PERMS = ["userprofile_use_org",
                     "organization_use_org",
                     "organization_change_org",
                     "userprofile_change_org",
-                    "userprofile_delete_org"]
+                    "userprofile_delete_org",
+                    "group_add_org",
+                    "group_use_org",
+                    "group_change_org",
+                    "group_delete_org"]
                     
 
 ADMIN_PERMS = ["%all%"]
@@ -79,26 +83,26 @@ DOCS = {"Templates":DOC_TEMPLATE}
 
 
 TEMPLATE_SIMPLE = ("""
-gateway gw
+gateway Gateway
 virtual vrhost
 webserver web1 .
 webserver web2 .
 
-gw.eth0 = vrhost.eth0
+Gateway.eth0 = vrhost.eth0
 web1.eth0 = vrhost.eth1
 web2.eth0 = vrhost.eth2""",
 "no readme",
 "no routing table")
 
 TEMPLATE_PWOSPF = ("""
-gateway gw
+gateway Gateway
 virtual vhost1
 virtual vhost2
 virtual vhost3
 webserver web1 .
 webserver web2 .
 
-gw.eth0 = vhost1.eth0
+Gateway.eth0 = vhost1.eth0
 vhost1.eth1 = vhost2.eth0
 vhost1.eth2 = vhost3.eth0
 vhost2.eth1 = web1.eth0

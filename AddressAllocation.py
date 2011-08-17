@@ -169,8 +169,9 @@ def __allocate_ip_block(block_from, num_blocks_to_alloc, min_block_mask_bits, sr
     # find the allocations we need to workaround to avoid collisions ("allocations of concern")
     db_allocs = db.IPBlockAllocation.objects.filter(block_from=block_from)
     allocations = [(__str_ip_to_int(a.start_addr), a.mask) for a in db_allocs]
-    ip_mask_list = [(__str_ip_to_int(sf_ip), sf_mask) for sf_ip, sf_mask in src_filters]
-    aoc = filter(lambda alloc : __allocs_filter(alloc, ip_mask_list), allocations)
+    #ip_mask_list = [(__str_ip_to_int(sf_ip), sf_mask) for sf_ip, sf_mask in src_filters]
+    #aoc = filter(lambda alloc : __allocs_filter(alloc, ip_mask_list), allocations)
+    aoc = allocations
     aoc.sort()
 
     # add fake start and end usages so we can allocate blocks on the edges too

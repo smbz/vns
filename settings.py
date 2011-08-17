@@ -1,4 +1,4 @@
-from os import environ
+from os import environ, path
 
 # tell Django about the Django settings file
 environ['DJANGO_SETTINGS_MODULE'] = 'web.settings'
@@ -42,4 +42,4 @@ MAX_TOPOLOGY_LIFE_SEC = 3600
 MAX_INACTIVE_TOPOLOGY_LIFE_SEC = 900
 
 # For VNS web server nodes: root folder which they will serve from
-WEB_SERVER_ROOT_WWW = './vns_web_server_www/'
+WEB_SERVER_ROOT_WWW = path.join(path.dirname(__file__), 'vns_web_server_www/')

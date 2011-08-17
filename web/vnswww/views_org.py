@@ -69,7 +69,6 @@ def org_access_check(request, callee, action, **kwargs):
 
 def org_users(request, org, on):
     tn = 'vns/org_users.html'
-    org = db.Organization.objects.get(name=on)
 
     # Get a list of visible users from this organization
     users = list(permissions.get_allowed_users(request.user).filter(org=org, retired=False))
@@ -82,3 +81,26 @@ def org_users(request, org, on):
     return direct_to_template(request, tn, {'org':org,
                                             'users':users,
                                             'deletable_users':deletable_users})
+
+class OrganizationForm(forms.Form):
+    name = forms.CharField(label="Organization name", max_length=128)
+
+def org_create(request):
+    tn = 'vns/org_create.html'
+    
+    if request.method == "POST":
+        form = OrganizationForm(request.POST)
+        if form.is_valid():
+            name = form.cleaned_data['name']
+            org = db.Organization()
+            org.parentOrg = request.user.get_profile().org
+            org.name = name
+            org.save()
+            messages.success(request, "Successfully created %s" % name)
+            return HttpResponseRedirect('/organizations/')
+        else:
+            messages.error(request, "Invalid form submitted - organization name must be <= 128 chars")
+            return direct_to_template(request, tn, {'form':form})
+    else:
+        form = OrganizationForm()
+        return direct_to_template(request, tn, {'form':form})

@@ -83,14 +83,40 @@ def make_registration_form(user):
         first_name = forms.CharField(label='First Name', max_length=30)
         last_name  = forms.CharField(label='Last Name', max_length=30)
         email      = forms.CharField(label='E-mail Address', max_length=75)
-        pw         = forms.CharField(label='Password', min_length=6, widget=forms.PasswordInput(render_value=False))
+        pw_method  = forms.ChoiceField(label='Password assignment',
+                                       choices=(('email','Email random password'),
+                                                ('raven','Require raven login'),
+                                                ('given','Set password given below')),
+                                       widget=forms.widgets.RadioSelect)
+        pw         = forms.CharField(label='Password',
+                                     widget=forms.PasswordInput(render_value=False),
+                                     required=False)
         pos        = forms.ChoiceField(label='Position', choices=pos_choices)
+
+        # See if we're allowed to add users at different organizations; if we
+        # are, show a choice of organizations
+        if permissions.allowed_user_access_create_different_org(user):
+            orgs = db.Organization.objects.all()
+            org_choices = [(o.name, o.name) for o in orgs]
+            org = forms.ChoiceField(label='Organization',
+                                    choices=org_choices)
 
         def clean_username(self):
             un = self.cleaned_data['username']
             if not re.match('^\w+$', un):
                 raise forms.ValidationError("Only alphanumeric characters and spaces are allowed in a user's name.")
             return un
+
+        def clean(self):
+            """Makes sure that the form data is valid; in particular, that a
+            password has been supplied if the choice of login method requires
+            it."""
+            login = self.cleaned_data['pw_method']
+            pw = self.cleaned_data['pw']
+            if login == 'given' and len(pw) < 6:
+                raise ValidationError("Password must be at least 6 characters")
+            return self.cleaned_data
+
     return RegistrationForm
 
 def user_create(request):
@@ -112,7 +138,21 @@ def user_create(request):
                 last_name = form.cleaned_data['last_name']
                 email = form.cleaned_data['email']
                 pw = form.cleaned_data['pw']
+                pw_method = form.cleaned_data['pw_method']
                 pos = form.cleaned_data['pos']
+
+                # If we've been given an organization, set it
+                try:
+                    org_name = form.cleaned_data['org']
+                    org = db.Organization.objects.get(name=org_name)
+                except KeyError:
+                    org = request.user.get_profile().org
+
+                # Work out what password to set
+                if pw_method == "email":
+                    pw = User.objects.make_random_password()
+                elif pw_method == "raven":
+                    pw = None
 
                 # Try to create the user
                 try:
@@ -129,16 +169,25 @@ def user_create(request):
                 up = db.UserProfile()
                 up.user = user
                 up.pos = pos
-                up.org = request.user.get_profile().org
+                up.org = org
                 up.generate_and_set_new_sim_auth_key()
-            
 
                 # Check that we're allowed to create a user with these attributes
                 if permissions.allowed_user_access_create(request.user, up.pos, up.org):
+
+                    # We can create the user
                     user.save()
                     up.save()
+
+                    # Email the user their password, if necessary
+                    if pw_method == "email":
+                        user.email_user("VNS Account", "The password for your "
+                                        "new VNS account is %s\n\nPlease log "
+                                        "in and change this ASAP." % pw)
+                    
                     messages.success(request, "Successfully created new user: %s" % username)
                     return HttpResponseRedirect('/user/%s/' % username)
+
                 else:
                     user.delete()
                     messages.error(request, "You are not allowed to create this "
@@ -154,6 +203,9 @@ def user_create(request):
                     pass
                 # Re-raise the error, so we can see what's going on in debug mode
                 raise
+        else:
+            messages.error(request, "Invalid form")
+            return direct_to_template(request, tn, {'form':form})
 
     else:
         form = RegistrationForm()

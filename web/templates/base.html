@@ -55,19 +55,26 @@
                   <td><a href="/topology/create/">Create Topology</a></td>
               </tr>
 	      {% endif %}
-	      {% if user.get_profile.can_create_user %}
-              <tr>
-                  <td><a href="/user/create/">Create User</a></td>
-              </tr>
-              <tr>
-                  <td><a href="/group/create/">Create Group</a></td>
-              </tr>
-          {% endif %}
 	      {% if user.get_profile.can_create_topologytemplate %}
 	      <tr>
 		  <td><a href="/template/create/">Create Template</a></td>
 	      </tr>
 	      {% endif %}
+	      {% if user.get_profile.can_create_user %}
+              <tr>
+                  <td><a href="/user/create/">Create User</a></td>
+              </tr>
+          {% endif %}
+		  {% if user.get_profile.can_create_group %}
+              <tr>
+                  <td><a href="/group/create/">Create Group</a></td>
+              </tr>
+          {% endif %}
+		  {% if user.get_profile.can_create_organization %}
+              <tr>
+                  <td><a href="/org/create/">Create Organization</a></td>
+              </tr>
+          {% endif %}
             </tbody></table>
         </div>
 
@@ -82,7 +89,7 @@
                         {% for message in messages %}
                         <div {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message|safe }}</div>
                         {% endfor %}
-                    </ul>
+					</div>
                 {% endif %}
 
                 {% block content %}{% endblock %}
@@ -102,9 +109,12 @@
 		</a>
 
 		<a href="http://www.red-gate.com/">
-		    <img height="40" style="border: medium none;" alt="Support by redgate" src="http://www.red-gate.com/assets/images/common/logo.png"/>
+		    <img height="40" style="border: medium none;" alt="Supported by Red Gate Software" src="http://www.red-gate.com/assets/images/common/logo.png"/>
 		</a>
             </p>
+			<p style="text-align: center; color: #aaa; font-size: small;">
+			  To contact us, email {{ SERVER_EMAIL_SPAMBOT }}.
+			</p>
         </div>
     </div>
 </div>

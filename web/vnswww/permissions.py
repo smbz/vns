@@ -161,6 +161,10 @@ def allowed_organization_access_use(user, org):
     elif user.has_perm("vnswww.organization_use_org"):
         return org == user.get_profile().org
 
+def allowed_organization_access_create(user):
+    """Returns True iff user is allowed to create new organizations."""
+    return user.has_perm("vnswww.add_organization")
+
 
 def allowed_ipblock_access_use(user, ipblock):
     if user.has_perm("vnswww.ipblock_use_any"):

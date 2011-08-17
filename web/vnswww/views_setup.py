@@ -17,7 +17,7 @@ class SetupForm(Form):
     gateway_mac = CharField(label="Gateway MAC address, e.g. 01:23:45:67:89:AB")
     block_ip = IPAddressField(label="IP of block for which to allocate from topologies")
     block_mask = IntegerField(label="Significant bits in IP of block", max_value = 32, min_value = 0)
-    default_templates = BooleanField(label="Import default topology templates", initial=True)
+    default_templates = BooleanField(label="Import default topology templates", initial=True, required=False)
 
 def do_setup_doc():
     from vns import initial
@@ -87,7 +87,6 @@ def setup(request):
             # Create the organisation
             org = db.Organization()
             org.name = organization_name
-            org.boss = request.user
             org.save()
 
             # Create a user profile for our admin
@@ -123,7 +122,8 @@ def setup(request):
             # Create topology templates
             if default_templates:
                 for (name, (description, readme, rtable)) in initial.TEMPLATES.iteritems():
-                    insert_topologytemplate(description, rtable, readme, request.user, name)
+                    insert_topologytemplate(description, rtable, readme, request.user, name,
+                                            visibility=db.TopologyTemplate.PUBLIC)
 
             # Create the documentation
             do_setup_doc()
@@ -132,8 +132,8 @@ def setup(request):
             return HttpResponseRedirect('/')
 
         else:
-            messages.error("Invalid")
-            return HttpResponseRedirect('/setup/')
+            messages.error(request, "Invalid form")
+            return direct_to_template(request, tn, {'form':form})
 
     else:
         form = SetupForm()

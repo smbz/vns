@@ -86,7 +86,7 @@ class TopologyArgumentError(Exception):
     pass
 
 
-def insert_topologytemplate(description, rtable, readme, user, template_name):
+def insert_topologytemplate(description, rtable, readme, user, template_name, visibility=db.TopologyTemplate.PROTECTED):
     """Parses a topology description and inserts the necessary fields into
     the DB."""
 
@@ -251,7 +251,7 @@ def insert_topologytemplate(description, rtable, readme, user, template_name):
     tt.name = template_name
     tt.owner = user
     tt.org = user.get_profile().org
-    tt.visibility = db.TopologyTemplate.PROTECTED
+    tt.visibility = visibility
     tt.readme = readme
     tt.rtable = rtable
     tt.specification = description

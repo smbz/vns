@@ -15,10 +15,10 @@ class SimulatorAdmin(admin.ModelAdmin):
     search_fields = ('name', 'ip')
 
 class OrganizationAdmin(admin.ModelAdmin):
-    list_display = ('name', 'parentOrg', 'boss')
+    list_display = ('name', 'parentOrg')
     ordering = ('name',)
     raw_id_fields = ('admins',)
-    search_fields = ('name', 'parentOrg__name') + make_user_search_fields('boss')
+    search_fields = ('name', 'parentOrg__name')
 
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ('user', 'org', 'pos', 'retired')

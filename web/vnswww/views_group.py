@@ -153,7 +153,7 @@ class UserGroupError(UserError):
 class UserPermissionError(UserError):
     pass
 
-def insert_users(user, users, group_name, pos, org, finger_server=None, email_suffix=None):
+def insert_users(user, users, group_name, pos, org, create_and_email_pw=False):
     """Inserts user into the database.  If an exception is raised, no changes
     are made to the DB.
     @param users  A string listing users, one per line, whitespace-
@@ -240,7 +240,7 @@ def insert_users(user, users, group_name, pos, org, finger_server=None, email_su
     # Add the new users to the DB, since we haven't had any errors
     for (username, email, firstname, lastname) in userlist:
         
-        # Create the django user - password is None, so they won't initially be able to log in
+        # Create the django user
         new_user = User.objects.create_user(username, email, None)
         print("%s %s" % (firstname, lastname))
         new_user.first_name = firstname
@@ -260,6 +260,16 @@ def insert_users(user, users, group_name, pos, org, finger_server=None, email_su
         new_user.save()
         up.save()
 
+        # If they need to have an initial password, set it and email it to them
+        if create_and_email_pw:
+            pw = User.objects.make_random_password()
+            new_user.set_password(pw)
+            print("Emailing %s with password" % new_user)
+            new_user.email_user("VNS Account", "The password for your new VNS "
+                                "account is %s\n\nPlease log in and change "
+                                "this ASAP." % pw)
+            new_user.save()
+
 def make_group_add_form(user):
     """Makes a form for use with group_add.  Only shows options which are
     relevant to user's permissions.
@@ -267,9 +277,13 @@ def make_group_add_form(user):
     pos_choices = list(permissions.get_allowed_positions(user))
     class GroupAddForm(forms.Form):
         group_name = forms.CharField(label='Group name', max_length=30)
-        pos = forms.ChoiceField(label='Position', choices=pos_choices)
-        users = forms.CharField(label='Users, e.g. fs123,fs123@example.com,Fred,Smith',
-                                widget=forms.Textarea)
+        pos        = forms.ChoiceField(label='Position', choices=pos_choices)
+        login      = forms.ChoiceField(label='Password allocation',
+                                       choices=((0, 'External login only'),
+                                                (1, 'Email random password')),
+                                       widget=forms.widgets.RadioSelect)
+        users      = forms.CharField(label='Users, e.g. fs123,fs123@example.com,Fred,Smith',
+                                     widget=forms.Textarea)
 
         # See if we are allowed to create users at different organizations, and if
         # we are, make a field for it
@@ -297,6 +311,7 @@ def group_add(request):
             # Get form data which is guaranteed to be present
             group_name = form.cleaned_data['group_name']
             pos = form.cleaned_data['pos']
+            login = form.cleaned_data['login']
             users = form.cleaned_data['users']
 
             # See if there is an organization field
@@ -305,14 +320,15 @@ def group_add(request):
                 org = db.Organization.objects.get(name=orgname)
             except KeyError:
                 # We didn't give the user an option for organization
-                org = request.user.org
+                org = request.user.get_profile().org
 
             # Parse the list of users
             try:
-                insert_users(request.user, users, group_name, int(pos), org)
+                insert_users(request.user, users, group_name, int(pos), org,
+                             create_and_email_pw = (login == '1'))
             except UserError as e:
                 messages.error(request, str(e))
-                return HttpResponseRedirect('/group/create/')
+                return direct_to_template(request, tn, {'form':form})
 
             messages.success(request, 'Users added successfully')
             return HttpResponseRedirect('/')
@@ -417,6 +433,38 @@ def make_ctform(user):
         template = forms.ChoiceField(label='Template', choices=template_choices)
         ipblock = forms.ChoiceField(label='IP Block to Allocate From', choices=ipblock_choices)
         num_to_create = forms.IntegerField(label='# to Create per User', initial='1')
+        ip_subnet = forms.IPAddressField(label='IP address subnet to allow', required=False)
+        ip_subnet_mask = forms.IntegerField(label='Significant bits in subnet', required=False,
+                                      min_value=0, max_value=32)
+
+        def clean_ip_subnet_mask(self):
+            try:
+                ip_subnet_mask = self.cleaned_data['ip_subnet_mask']
+            except KeyError:
+                # The subnet shouldn't be provided either
+                try:
+                    ip_subnet = self.cleaned_data['ip_subnet']
+                except KeyError:
+                    return None
+                else:
+                    raise ValidationError("You must provide a subnet mask if "
+                                          "you specify a subnet")
+            
+            try:
+                ip_subnet = self.cleaned_data['ip_subnet']
+            except KeyError:
+                # We've provided a subnet mask but not a subnet
+                raise ValidationError("You must provide a subnet if you "
+                                      "specify a subnet mask")
+
+            # Otherwise, we have both; check that the subnet mask is a suitable
+            # size
+            if ip_subnet_mask < 0 or ip_subnet_mask > 32:
+                raise ValidationError("The subnet mask must be between 0 and "
+                                      "32 inclusive")
+
+            return ip_subnet_mask
+
     return CTForm
 
 def group_topology_create(request, group, **kwargs):
@@ -441,6 +489,8 @@ def group_topology_create(request, group, **kwargs):
             template_id = form.cleaned_data['template']
             ipblock_id = form.cleaned_data['ipblock']
             num_to_create = form.cleaned_data['num_to_create']
+            ip = form.cleaned_data['ip_subnet']
+            mask = form.cleaned_data['ip_subnet_mask']
 
             # Do lots of permissions and existence checks - need a topology
             # template and IP block
@@ -494,13 +544,19 @@ def group_topology_create(request, group, **kwargs):
                     num_perms += 1
                     continue
 
+                # Make a list of source IP filters
+                if ip != None and mask != None:
+                    src_filters = [(ip, mask)]
+                else:
+                    src_filters = []
+
                 # Create the topology
                 for _ in range(0,num_to_create):
                     err,_,_,_ = instantiate_template(org=u.get_profile().org,
                                                      owner=u,
                                                      template=template,
                                                      ip_block_from=ipblock,
-                                                     src_filters=[],
+                                                     src_filters=src_filters,
                                                      temporary=False)
                 
                     # Update the numbers with/without errors
