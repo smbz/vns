@@ -132,7 +132,8 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^setup/?$',                                      setup),
     (r'^setup/doc/?$',                                  setup_doc),
     (r'^ravenreturn/?$',                                raven_return),
-    (r'^ravenlogin/?$',                                 raven_login)
+    (r'^ravenlogin/?$',                                 raven_login),
+    (r'^postlogin/?$',                                  post_login),
 )
 
 urlpatterns += patterns('',

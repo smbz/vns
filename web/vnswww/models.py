@@ -118,6 +118,8 @@ class UserProfile(Model):
                         help_text="The ASCII string (system-generated) "+
                                   "which the user uses to authenticate with the simulator.")
     retired = BooleanField(default=False, help_text='Whether this object is still in use.  It is kept around after retirement for stats purposes.')
+    last_login = DateTimeField(auto_now=False, help_text='The date and time this user last logged on, excluding logins via the native web interface.',
+                               null=True)
 
     @staticmethod
     def cmp_pos_order(a, b):

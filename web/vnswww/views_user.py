@@ -1,3 +1,4 @@
+import datetime
 import re
 
 from django import forms
@@ -301,3 +302,10 @@ def user_profile(request, up):
                                             'can_change':can_change,
                                             'topos_owned':topos_owned,
                                             'topos_assigned':topos_assigned})
+
+def post_login(request):
+    """Logs the fact that a user has just logged on."""
+    up = request.user.get_profile()
+    up.last_login = datetime.datetime.now()
+    up.save()
+    return HttpResponseRedirect('/')

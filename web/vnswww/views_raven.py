@@ -40,4 +40,4 @@ def raven_return(request):
                            "or you don't have an account on VNS.")
 
     # Redirect somewhere sensible
-    return HttpResponseRedirect('/')
+    return HttpResponseRedirect('/postlogin/')
