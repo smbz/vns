@@ -1,3 +1,6 @@
+import re
+from string import Template
+
 from django import forms
 from django.db import IntegrityError
 from django.contrib import messages
@@ -166,7 +169,8 @@ def insert_users(user, users, group_name, pos, org, create_and_email_pw=False):
     @param org  An Organization to which the group and users will belong
     @exception UserSyntaxError if there is a syntax error in users
     @exception UserGroupError if a group by that name already exists
-    @exception UserUserError if a user by that name already exists
+    @exception UserUserError if a user by that name already exists or there
+    is an invalid username
     @exception UserPermissionError if the user creating the users doesn't have
     the right permission"""
 
@@ -174,7 +178,8 @@ def insert_users(user, users, group_name, pos, org, create_and_email_pw=False):
 
     userlist = []
 
-    # Parse the lines and add the user details to userlist
+    # Parse the lines and add the user details to userlist; check that all the
+    # usernames are valid
     lines = users.splitlines()
     for i,l in enumerate(lines):
         l = l.strip()
@@ -191,10 +196,14 @@ def insert_users(user, users, group_name, pos, org, create_and_email_pw=False):
         lastname = toks[3].strip()
         userlist.append( (username, email, firstname, lastname) )
 
+        # Check for valid username
+        if re.match(r'^\w+$', username) is None:
+            raise UserUserError("The username %s is invalid." % username)
+
     # Check that the group doesn't exist
     if include_group:
         try:
-            _ = db.Group.objects.get(name=group_name, org=user.get_profile().org)
+            _ = db.Group.objects.get(name=group_name, org=org)
         except db.Group.DoesNotExist:
             pass
         else:
@@ -294,6 +303,13 @@ def make_group_add_form(user):
             org_choices = [(o.name, o.name) for o in orgs]
             org = forms.ChoiceField(label='Organization',
                                     choices=org_choices)
+
+        def clean_group_name(self):
+            """Ensure the group name is valid"""
+            group_name = self.cleaned_data['group_name']
+            if re.match(r'^\w+$', group_name) is None:
+                raise forms.ValidationError("Group names can contain only alphanumeric characters and underscores")
+            return group_name
     
     return GroupAddForm
 
@@ -335,7 +351,7 @@ def group_add(request):
 
         else:
             messages.error(request, 'Invalid form')
-            return HttpResponseRedirect('/group/create')
+            return direct_to_template(request, tn, {'form':form})
 
     else:
         form = GroupAddForm()
@@ -617,3 +633,57 @@ def topology_create_message(request, num_errs, num_perms, num_created):
                       "other errors." % (num_created, num_perms,
                                          num_errs)
                       )
+
+
+class GroupEmailForm(forms.Form):
+    subject = forms.CharField(label="Email subject")
+    text = forms.CharField(label="Email text", widget=forms.Textarea)
+
+
+def group_email(request, group, **kwargs):
+    """Emails all users in a group with a user-input email"""
+    
+    tn = 'vns/group_email.html'
+
+    if request.method == 'POST':
+        form = GroupEmailForm(request.POST)
+        
+        if form.is_valid():
+
+            # Get the fields from the form
+            subject = form.cleaned_data['subject']
+            text = form.cleaned_data['text']
+
+            # Make a dict of tokens to replace which are the same for all users
+            global_sub = {'GROUP' : group.name,
+                          'ORGANIZATION' : group.org.name,
+                          'ORGANISATION' : group.org.name}
+
+            # Use python template strings to do these substitutions on the email
+            text = Template(text).safe_substitute(global_sub)
+            subject = Template(subject).safe_substitute(global_sub)
+
+            # Loop through the users, sending each an email
+            users = group.users.all()
+            for u in users:
+
+                # Make any user-specific substitutions
+                sub = {'USERNAME' : u.username,
+                       'FULLNAME' : u.get_full_name(),
+                       'FIRSTNAME' : u.first_name,
+                       'LASTNAME' : u.last_name}
+                text = Template(text).safe_substitute(sub)
+                subject = Template(subject).safe_substitute(sub)
+                
+                # Send the email
+                u.email_user(subject, text)
+
+            # Send a nice confirmation message
+            messages.success(request, "Successfully emailed group %s" % group.name)
+            return HttpResponseRedirect('/org/%s/%s/' % (group.org.name, group.name))
+
+        else:
+            return direct_to_template(request, tn, {'form':form, 'group':group})
+
+    else:
+        return direct_to_template(request, tn, {'form':GroupEmailForm(), 'group':group})

@@ -1,3 +1,4 @@
+
 from django.db.models import Q
 
 import models as db
@@ -21,9 +22,15 @@ def allowed_user_access_create(user, pos=None, org=None):
         return True
     else:
 
+        # Try to get the user's profile - this fails if they're anonymous, so return False
+        try:
+            up = user.get_profile()
+        except AttributeError:
+            return False
+
         # If we're trying to create a user in a different organization and we're
         # not allowed to
-        if org != user.get_profile().org:
+        if org != up.org:
             if not user.has_perm("vnswww.userprofile_create_different_org"):
                 return False
         try:
@@ -40,18 +47,36 @@ def allowed_user_access_create_different_org(user):
 
 def allowed_user_access_change(usera, userb):
     """Returns True if usera is allowed to change userb's profile, password, etc"""
-    return ((usera == userb or usera.has_perm("vnswww.userprofile_change_any") or (usera.has_perm("vnswww.userprofile_change_org") and usera.get_profile().org == userb.get_profile().org))
-             and not userb.get_profile().retired)
+    try:
+        upa = usera.get_profile()
+        upb = userb.get_profile()
+    except AttributeError:
+        return False
+
+    return ((usera == userb or usera.has_perm("vnswww.userprofile_change_any") or (usera.has_perm("vnswww.userprofile_change_org") and upa.org == upb.org))
+             and not upb.retired)
 
 def allowed_user_access_delete(usera, userb):
     """True if usera is allowed to delete userb"""
+    try:
+        upa = usera.get_profile()
+        upb = userb.get_profile()
+    except AttributeError:
+        return False
+
     return (usera == userb and usera.has_perm("vnswww.userprofile_delete_self")
             or usera.has_perm("vnswww.userprofile_delete_any")
-            or (usera.has_perm("vnswww.userprofile_delete_org") and usera.get_profile().org == userb.get_profile().org))
+            or (usera.has_perm("vnswww.userprofile_delete_org") and upa.org == upb.org))
 
 def allowed_user_access_use(usera, userb):
     """True if usera is allowed to view userb's profile"""
-    return usera == userb or usera.has_perm("vnswww.userprofile_use_any") or (usera.has_perm("vnswww.userprofile_use_org") and usera.get_profile().org == userb.get_profile().org)
+    try:
+        upa = usera.get_profile()
+        upb = userb.get_profile()
+    except AttributeError:
+        return False
+
+    return usera == userb or usera.has_perm("vnswww.userprofile_use_any") or (usera.has_perm("vnswww.userprofile_use_org") and upa.org == upb.org)
 
 
 def allowed_topology_access_create(user):
@@ -62,24 +87,39 @@ def allowed_topology_access_change(user, topology):
     """Returns True if the user is allowed write access to the topology.
     @param user  The user trying to gain access
     @param topology  The topology they're trying to gain access to"""
-    return topology.owner == user or user.has_perm("vnswww.topology_change_any") or (user.has_perm("vnswww.topology_change_org") and user.get_profile().org == topology.org)
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
+    return topology.owner == user or user.has_perm("vnswww.topology_change_any") or (user.has_perm("vnswww.topology_change_org") and up.org == topology.org)
 
 def allowed_topology_access_delete(user, topology):
     """Returns True if the user is allowed to delete topology.
     @param user  The user trying to gain access
     @param topology  The topology they're trying to gain access to"""
-    return topology.owner == user or user.has_perm("vnswww.topology_delete_any") or (user.has_perm("vnswww.topology_delete_org") and user.get_profile().org == topology.org)
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
+    return topology.owner == user or user.has_perm("vnswww.topology_delete_any") or (user.has_perm("vnswww.topology_delete_org") and up.org == topology.org)
 
 def allowed_topology_access_use(user, topology):
     """Returns True if user is allowed read access to topology, False otherwise
     @param user  The user who is trying to gain access
     @param topology  The topology they're trying to gain access to"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     return (topology.allowed_users.filter(id=user.id).exists()
             or user == topology.owner
             or topology.public
             or user.has_perm("vnswww.topology_use_any")
             or (user.has_perm("vnswww.topology_use_org")
-                and topology.org == user.get_profile().org))
+                and topology.org == up.org))
 
 
 def allowed_topologytemplate_access_create(user):
@@ -90,25 +130,40 @@ def allowed_topologytemplate_access_change(user, template):
     """Returns True if user is allowed write access to template, False otherwise
     @param user  The user who is trying to gain access
     @param topology  The template they're trying to gain access to"""
-    return template.owner == user or user.has_perm("vnswww.topologytemplate_change_any") or (user.has_perm("vnswww.topologytemplate_change_org") and template.org == user.get_profile().org)
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
+    return template.owner == user or user.has_perm("vnswww.topologytemplate_change_any") or (user.has_perm("vnswww.topologytemplate_change_org") and template.org == up.org)
 
 def allowed_topologytemplate_access_delete(user, template):
     """Returns True if user is allowed to delete template, False otherwise
     @param user  The user who is trying to gain access
     @param topology  The template they're trying to gain access to"""
-    return template.owner == user or user.has_perm("vnswww.topologytemplete_delete_any") or (user.has_perm("vnswww.topologytemplete_delete_org") and template.org == user.get_profile().org)
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
+    return template.owner == user or user.has_perm("vnswww.topologytemplete_delete_any") or (user.has_perm("vnswww.topologytemplete_delete_org") and template.org == up.org)
 
 def allowed_topologytemplate_access_use(user, template):
     """Returns True if user is allowed read access to template, False otherwise
     @param user  The user who is trying to gain access
     @param topology  The template they're trying to gain access to"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     return (template.visibility == db.TopologyTemplate.PUBLIC
             or (template.visibility == db.TopologyTemplate.PROTECTED
-                and template.org == user.get_profile().org)
+                and template.org == up.org)
             or template.owner == user
             or user.has_perm("vnswww.topology_use_any")
             or (user.has_perm("vnswww.topology_use_org")
-                and template.org == user.get_profile().org))
+                and template.org == up.org))
 
 
 def allowed_group_access_use(user, group):
@@ -125,41 +180,61 @@ def allowed_group_access_create(user, org=None):
     create groups at that organization.
     @param user  The user who is trying to create a group
     @param org  The Organization they're trying to create the group for"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     if org is None:
         return (user.has_perm("vnswww.group_add_any")
                 or user.has_perm("vnswww.group_add_org"))
     else:
         return (user.has_perm("vnswww.group_add_any")
                 or (user.has_perm("vnswww.group_add_org")
-                    and org == user.get_profile().org))
+                    and org == up.org))
 
 def allowed_group_access_change(user, group):
     """Returns True if user is allowed to add/remove users to/from group, False
     otherwise
     @param user  The user who is trying to gain access
     @param group  The group they're trying to add/remove users to/from"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     return (user.has_perm("vnswww.group_change_any")
             or (user.has_perm("vnswww.group_change_org")
-                and group.org == user.get_profile().org))
+                and group.org == up.org))
 
 def allowed_group_access_delete(user, group):
     """Returns True if user is allowed to delete group, False otherwise.  Note
     that this does NOT mean user is allowed to delete users in the group.
     @param user  The user who is trying to gain access
     @param group  The group they're trying to gain access to"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     return (user.has_perm("vnswww.group_delete_any")
             or (user.has_perm("vnswww.group_delete_org")
-                and group.org == user.get_profile().org))
+                and group.org == up.org))
 
 
 def allowed_organization_access_use(user, org):
     """Returns True if user is allowed read access to org, False otherwise
     @param user  The user who is trying to gain access
     @param org  The organization they're trying to access"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     if user.has_perm("vnswww.organization_use_any"):
         return True
     elif user.has_perm("vnswww.organization_use_org"):
-        return org == user.get_profile().org
+        return org == up.org
 
 def allowed_organization_access_create(user):
     """Returns True iff user is allowed to create new organizations."""
@@ -167,12 +242,17 @@ def allowed_organization_access_create(user):
 
 
 def allowed_ipblock_access_use(user, ipblock):
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return False
+
     if user.has_perm("vnswww.ipblock_use_any"):
         return True
     elif user.has_perm("vnswww.ipblock_use_org"):
-        if ipblock.org == user.get_profile().org:
+        if ipblock.org == up.org:
             return True
-        elif ipblock.org == user.get_profile().org.parentOrg and ipblock.usable_by_child_orgs:
+        elif ipblock.org == up.org.parentOrg and ipblock.usable_by_child_orgs:
             return True
     return False
 
@@ -180,13 +260,18 @@ def allowed_ipblock_access_use(user, ipblock):
 def get_allowed_templates(user):
     """Returns a QuerySet of all the templates that this user has read access to.
     @param user  The user to consider access for."""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return db.TopologyTemplate.objects.none()
+
     if user.has_perm("vnswww.topologytemplate_use_any"):
         # We can view and use any templates
         templates = db.TopologyTemplate.objects.filter()
     else:
         q_public = Q(visibility = db.TopologyTemplate.PUBLIC)
-        q_protected_org = Q(visibility = db.TopologyTemplate.PROTECTED, org = user.get_profile().org)
-        q_org = Q(org = user.get_profile().org)
+        q_protected_org = Q(visibility = db.TopologyTemplate.PROTECTED, org = up.org)
+        q_org = Q(org = up.org)
         q_own = Q(owner = user)
         if user.has_perm("vnswww.topologytemplate_use_org"):
             # We can view and use any from the user's organization
@@ -201,6 +286,11 @@ def get_allowed_templates(user):
 def get_allowed_topologies(user):
     """Returns a QuerySet of all the topologies that a user has read access to.
     @param user The user to consider access for."""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return db.Topology.objects.none()
+
     if user.has_perm("vnswww.topology_use_any"):
         # We can view and use any templates
         topos = db.Topology.objects.filter()
@@ -224,12 +314,17 @@ def get_allowed_topologies(user):
 def get_allowed_ipblocks(user):
     """Returns a list of IP blocks that this user is allowed to use.
     @user The user to consider access for."""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return []
+
     if user.has_perm("vnswww.ipblock_use_any"):
         # Can use any blocks
         blocks = db.IPBlock.objects.filter()
     else:
-        q_org = Q(org=user.get_profile().org)
-        q_childorg = Q(org=user.get_profile().org.parentOrg, usable_by_child_orgs=True)
+        q_org = Q(org=up.org)
+        q_childorg = Q(org=up.org.parentOrg, usable_by_child_orgs=True)
         print user.get_all_permissions()
         if user.has_perm("vnswww.ipblock_use_org"):
             print "Using blocks from own organization"
@@ -244,6 +339,11 @@ def get_allowed_ipblocks(user):
 def get_allowed_positions(user):
     """Returns a list of tuples of positions that this user can assign to other
     users.  The tuples are of the form (id, name)."""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return []
+
     r = []
     for (pk,perm) in db.UserProfile.PERMISSIONS.iteritems():
         if user.has_perm(perm):
@@ -253,9 +353,14 @@ def get_allowed_positions(user):
 
 def get_allowed_users(user):
     """Returns an QuerySet of UserProfiles which this user is allowed to view"""
+    try:
+        up = user.get_profile()
+    except AttributeError:
+        return db.UserProfile.objects.none()
+
     if user.has_perm("vnswww.userprofile_use_any"):
         return db.UserProfile.objects.all()
     elif user.has_perm("vnswww.userprofile_use_org"):
-        return db.UserProfile.objects.filter(org=user.get_profile().org)
+        return db.UserProfile.objects.filter(org=up.org)
     else:
-        return db.UserProfile.objects.filter(pk=user.get_profile().id)
+        return db.UserProfile.objects.filter(pk=up.id)

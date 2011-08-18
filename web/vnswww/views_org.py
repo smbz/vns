@@ -1,3 +1,5 @@
+import re
+
 from django import forms
 from django.contrib import messages
 from django.http import HttpResponseRedirect
@@ -85,6 +87,12 @@ def org_users(request, org, on):
 class OrganizationForm(forms.Form):
     name = forms.CharField(label="Organization name", max_length=128)
 
+    def clean_name(self):
+        name = self.cleaned_data['name']
+        if re.match(r'^\w[\w ]*$', name) is None:
+            raise forms.ValidationError("Organization name must contain only alphanumeric characters, underscores and spaces and must not start with a space.")
+        return name
+
 def org_create(request):
     tn = 'vns/org_create.html'
     
@@ -92,14 +100,17 @@ def org_create(request):
         form = OrganizationForm(request.POST)
         if form.is_valid():
             name = form.cleaned_data['name']
+            
+            # Add the organization to the database
             org = db.Organization()
             org.parentOrg = request.user.get_profile().org
             org.name = name
             org.save()
+
+            # Return a success message to the user
             messages.success(request, "Successfully created %s" % name)
             return HttpResponseRedirect('/organizations/')
         else:
-            messages.error(request, "Invalid form submitted - organization name must be <= 128 chars")
             return direct_to_template(request, tn, {'form':form})
     else:
         form = OrganizationForm()

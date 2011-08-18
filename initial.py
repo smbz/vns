@@ -79,7 +79,33 @@ block the topology is assigned.  One IP address is assigned to each interface
 whether or not this argument is present.</p>"""
 
 
-DOCS = {"Templates":DOC_TEMPLATE}
+DOC_GROUP_EMAIL = """
+<p>The group email form has several substitutions which can be made.  These 
+can be used by placing "$NAME_OF_VARIABLE" in the text or the subject of the
+email, e.g.</p>
+<p>Dear $FULLNAME,<br/>
+Your username on VNS is $USERNAME...</p>
+<p>Available substitutions are:</p>
+<ul>
+  <li>$GROUP  The name of the group which was emailed.</li>
+  <li>$ORGANIZATION <em>or</em> $ORGANISATION  The name of the organization the
+group (not the user) belongs to.</li>
+  <li>$FULLNAME  The full name of the user, e.g. John Smith</li>
+  <li>$FIRSTNAME  The first name of the user, e.g. John</li>
+  <li>$LASTNAME  The last name of the user, e.g. Smith</li>
+  <li>$USERNAME  The username the user is identified by on VNS, e.g. john_smith
+or js123</li>
+</ul>
+<p>Anything unrecognized is not substituted for and does not produce an error.
+Single dollar signs can be produced by entering "$$".  Extra text can be
+included immediately after the substitution by the use of braces, e.g.
+"${GROUP}group".  For more details, see the Python string.Template
+documentation.</p>"""
+
+
+DOCS = {"Templates":DOC_TEMPLATE,
+        "Group_email":DOC_GROUP_EMAIL}
+
 
 
 TEMPLATE_SIMPLE = ("""

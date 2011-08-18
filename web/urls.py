@@ -84,6 +84,7 @@ dict_group_delete          = make_access_check_dict(group_delete, "delete")
 dict_group_topology_create = make_access_check_dict(group_topology_create, "change")
 dict_group_topology_delete = make_access_check_dict(group_topology_delete, "delete")
 dict_group_view            = make_access_check_dict(group_view, "use")
+dict_group_email           = make_access_check_dict(group_email, "change")
 
 def redirect_to_file(request, folder, file, ext):
     return redirect_to(request, folder + file + '.' + ext)
@@ -128,6 +129,7 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^org/(?P<on>[^/]+)/(?P<gn>\w+)/delete/?$',       group_access_check, dict_group_delete),
     (r'^org/(?P<on>[^/]+)/(?P<gn>\w+)/createtopo/?$',   group_access_check, dict_group_topology_create),
     (r'^org/(?P<on>[^/]+)/(?P<gn>\w+)/deletetopo/?$',   group_access_check, dict_group_topology_delete),
+    (r'^org/(?P<on>[^/]+)/(?P<gn>\w+)/email/?$',        group_access_check, dict_group_email),
     (r'^doc/(?P<name>\w.*)?$',                          doc_view),
     (r'^setup/?$',                                      setup),
     (r'^setup/doc/?$',                                  setup_doc),

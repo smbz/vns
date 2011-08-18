@@ -7,7 +7,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User, Group
 from django.contrib.auth.decorators import login_required
 from django.db import IntegrityError
-from django.utils.safestring import mark_safe
+from django.utils.safestring import mark_safe, mark_for_escaping
 from django.views.generic.simple import direct_to_template
 from django.http import HttpResponseRedirect
 
@@ -105,7 +105,7 @@ def make_registration_form(user):
         def clean_username(self):
             un = self.cleaned_data['username']
             if not re.match('^\w+$', un):
-                raise forms.ValidationError("Only alphanumeric characters and spaces are allowed in a user's name.")
+                raise forms.ValidationError("Only alphanumeric characters and underscores are allowed in a user's name.")
             return un
 
         def clean(self):
@@ -121,10 +121,6 @@ def make_registration_form(user):
     return RegistrationForm
 
 def user_create(request):
-    # some students are "staff" but don't let them create new users
-    if request.user.get_profile().is_student():
-        messages.error(request, "You are not permitted to create new users.")
-        return HttpResponseRedirect('/')
 
     tn = 'vns/user_create.html'
     RegistrationForm = make_registration_form(request.user)
@@ -142,7 +138,8 @@ def user_create(request):
                 pw_method = form.cleaned_data['pw_method']
                 pos = form.cleaned_data['pos']
 
-                # If we've been given an organization, set it
+                # If we've been given an organization, use that org; otherwise
+                # use the org of the user who's creating the new user
                 try:
                     org_name = form.cleaned_data['org']
                     org = db.Organization.objects.get(name=org_name)
@@ -276,7 +273,7 @@ def user_delete(request, up, **kwargs):
         je.topology = t
         je.save()
 
-    messages.success(request, mark_safe("You have successfully deleted %s.  (<a href=\"/user/%s/undelete/\">undo</a>)" % (un,un)))
+    messages.success(request, mark_for_escaping("You have successfully deleted %s." % un))
     return HttpResponseRedirect('/org/%s/' % on)
 
 def user_undelete(request, up, **kwargs):

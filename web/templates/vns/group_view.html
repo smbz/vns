@@ -8,8 +8,9 @@
     <p>
     <a href="/org/{{ group.org.name }}/{{ group.name }}/delete/">Delete all users in this group</a><br/>
     {% if users %}
-	<a href="/org/{{ group.org.name }}/{{ group.name }}/createtopo/">Create a topology for all users in this group</a><br/>
-	<a href="/org/{{group.org.name }}/{{ group.name }}/deletetopo/">Delete topologies owned by all users in this group</a><br/>
+	<a href="/org/{{ group.org.name }}/{{ group.name }}/createtopo/">Create a topology for each user in this group</a><br/>
+	<a href="/org/{{ group.org.name }}/{{ group.name }}/deletetopo/">Delete topologies owned by all users in this group</a><br/>
+	<a href="/org/{{ group.org.name }}/{{ group.name }}/email/">Email all users in this group</a><br/>
 	</p>
     <table>
         <tr>

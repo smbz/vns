@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}Email All Users in group{% endblock %}
+{% block title %}Email All Users in '{{ group.name }}'{% endblock %}
+
+{% block content %}
+    {% if form %}
+        <form action="/org/{{ group.org.name }}/{{ group.name }}/email/" method="post">
+        <table>
+            {{ form.as_table }}
+            <tr><td colspan="2">
+                <p>N.B.  You can make substitutions for a user's name and other
+                fields in an email; see <a href="/doc/Group_email">the
+                documentation</a>.</p>
+                <input type="submit" value="Send" />
+            </td></tr>
+        </table>
+        </form>
+    {% else %}
+        <a href="/groups/">View groups</a>
+    {% endif %}
+{% endblock %}
