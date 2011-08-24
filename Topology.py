@@ -44,7 +44,8 @@ class Topology():
     def __init__(self, tid, raw_socket, client_ip, user, start_stats=True):
         """Reads topology with the specified id from the database.  A
         DoesNotExist exception (Topology, IPAssignment, or IPBlockAllocation) is
-        raised if this fails."""
+        raised if this fails.  Note that this should only be invoked from the
+        database thread."""
         self.raw_socket = raw_socket
 
         # stores jobs which need to be done for this topology
@@ -254,16 +255,23 @@ class Topology():
         """Forwards packet to the node connected to the gateway.  If
         rewrite_dst_mac is True then the destination mac is set to that of the
         first simulated node attached to the gateway."""
+        print("Handling incoming packet")
         gw_intf = self.gw_intf_to_first_hop
         if gw_intf:
+            print("Noting packet to toppology")
             self.stats.note_pkt_to_topo(len(packet))
+            print("Rewriting destination MAC")
             if rewrite_dst_mac:
                 if self.is_arp_cache_valid():
                     new_dst_mac = self.arp_translation
+                    print("Sending")
                     gw_intf.link.send_to_other(gw_intf, new_dst_mac + packet[6:])
                 else:
+                    print("Sending ARP for packet")
                     self.need_arp_translation_for_pkt(packet)
+                    print("Finished sending ARP")
             else:
+                print("Sending")
                 gw_intf.link.send_to_other(gw_intf, packet)
 
     def need_arp_translation_for_pkt(self, ethernet_frame):

@@ -32,18 +32,24 @@ from TopologyResolver import TopologyResolver
 from VNSProtocol import VNS_DEFAULT_PORT, create_vns_server
 from VNSProtocol import VNSOpen, VNSClose, VNSPacket, VNSOpenTemplate, VNSBanner, VNSRtable, VNSAuthRequest, VNSAuthReply, VNSAuthStatus
 from web.vnswww import models as db
+import DBService
 
 class VNSSimulator:
     """The VNS simulator.  It gives clients control of nodes in simulated
     topologies."""
     def __init__(self):
+        # Initialise the DB thread
+        DBService.start()
+
         # close out any hanging stats records (shouldn't be any unless the
         # server was shutdown abnormally with no chance to cleanup)
-        db.UsageStats.objects.filter(active=True).update(active=False)
+        DBService.run_and_wait(lambda: db.UsageStats.objects.filter(active=True).update(active=False))
 
         # free any hanging temporary topologies
-        for t in db.Topology.objects.filter(temporary=True):
-            AddressAllocation.free_topology(t.id)
+        def __free_hanging_temp_topos(topos):
+            for t in topos:
+                AddressAllocation.free_topology(t.id)
+        DBService.run_and_wait(lambda:__free_hanging_temp_topos(db.Topology.objects.filter(temporary=True)), priority=0)
 
         self.topologies = {} # maps active topology ID to its Topology object
         self.resolver = TopologyResolver() # maps MAC/IP addresses to a Topology
@@ -117,6 +123,8 @@ class VNSSimulator:
         local_job_queues_list = []
 
         while True:
+            logging.info("Servicing topology queues %f" % time())
+
             # whether or not a job has been serviced on this loop
             serviced_a_job = False
 
@@ -131,7 +139,9 @@ class VNSSimulator:
                 job = q.start_service()
                 while job:
                     # thread safety: run each job from the main twisted event loop
+                    print("Running job %f" % time())
                     self.__return_after_running_job_on_main_thread(job)
+                    print("Finished running job %f" % time())
                     job = q.task_done()
                     serviced_a_job = True
 
@@ -144,24 +154,32 @@ class VNSSimulator:
                 if self.job_available_event.is_set():
                     self.job_available_event.clear()
                 else:
+                    logging.info("Waiting for more jobs %f" % time())
                     self.job_available_event.wait()
+                    logging.info("Finished waiting %f" % time())
 
     def __do_job_then_notify(self, job):
         """Acquires the service_condition lock, runs job, and the notifies all
         threads waiting on service_condition."""
+        print("Waiting for service_condition (2)")
         with self.service_condition:
+            print("Calling job")
             job()
+            print("Finished doing job in main thread")
             self.service_condition.notifyAll()
 
     def __return_after_running_job_on_main_thread(self, job):
         """Requests that job be run on the main thread.  Waits on
         service_condition until it is notified that the job is done."""
+        print("Waiting for service_condition (1)")
         with self.service_condition:
             # ask the main thread to run our job (it cannot start until we release this lock)
+            print("Calling job from main thread")
             reactor.callFromThread(lambda : self.__do_job_then_notify(job))
 
             # wait for the main thread to finish running the job
             self.service_condition.wait()
+            print("Finished doing job in service thread")
 
     def __start_raw_socket(self, dev):
         """Starts a socket for sending raw Ethernet frames."""
@@ -176,18 +194,24 @@ class VNSSimulator:
             log_exception(logging.CRITICAL, 'failed to open raw socket' + extra)
             sys.exit(-1)
 
+    def __stop_topo_if_necessary(self, topo, changed):
+        stats = topo.get_stats()
+        if not changed and stats.get_idle_time_sec() > MAX_INACTIVE_TOPOLOGY_LIFE_SEC:
+            self.stop_topology(topo, 'topology exceeded maximum idle time (%dsec)' % MAX_INACTIVE_TOPOLOGY_LIFE_SEC)
+        elif stats.get_num_sec_connected() > MAX_TOPOLOGY_LIFE_SEC:
+            self.stop_topology(topo, 'topology exceeded maximum lifetime (%dsec)' % MAX_TOPOLOGY_LIFE_SEC)
+
     def periodic_callback(self):
         # save statistics values
         for topo in self.topologies.values():
             stats = topo.get_stats()
-            if not stats.save_if_changed() and stats.get_idle_time_sec() > MAX_INACTIVE_TOPOLOGY_LIFE_SEC:
-                self.stop_topology(topo, 'topology exceeded maximum idle time (%dsec)' % MAX_INACTIVE_TOPOLOGY_LIFE_SEC)
-            elif stats.get_num_sec_connected() > MAX_TOPOLOGY_LIFE_SEC:
-                self.stop_topology(topo, 'topology exceeded maximum lifetime (%dsec)' % MAX_TOPOLOGY_LIFE_SEC)
+            stats_deferred = DBService.run_in_db_thread(stats.save_if_changed)
+            stats_deferred.addCallback(lambda c: self.__stop_topo_if_necessary(topo, c))
 
         # see if there is any admin message to be sent to all clients
+        
         try:
-            bts = db.SystemInfo.objects.get(name='banner_to_send')
+            bts = DBService.run_and_wait(db.SystemInfo.objects.get(name='banner_to_send'))
             msg_for_clients = bts.value
             bts.delete()
             logging.info('sending message to clients: %s' % msg_for_clients)
@@ -198,26 +222,29 @@ class VNSSimulator:
             pass
 
         # note in the db that the reactor thread is still running
-        try:
-            latest = db.SystemInfo.objects.get(name='last_alive_time')
-        except db.SystemInfo.DoesNotExist:
-            latest = db.SystemInfo()
-            latest.name = 'last_alive_time'
-        latest.value = str(int(time()))
-        latest.save()
+        def __update_reactor_alive_time():
+            try:
+                latest = db.SystemInfo.objects.get(name='last_alive_time')
+            except db.SystemInfo.DoesNotExist:
+                latest = db.SystemInfo()
+                latest.name = 'last_alive_time'
+            latest.value = str(int(time()))
+            latest.save()
+        DBService.run_in_db_thread(__update_reactor_alive_time)
 
         # see if there are any topologies to be deleted
-        for je in db.JournalTopologyDelete.objects.all():
+        jtd = DBService.run_and_wait(db.JournalTopologyDelete.objects.all)
+        for je in jtd:
             try:
                 topo = self.topologies[je.topology.id]
             except KeyError:
                 # this topology is not in use, we can just delete it from
                 # the db - this also deletes the journal entry
-                je.topology.delete()
+                DBService.run_in_db_thread(je.topology.delete)
             else:
                 # the topology is in use; stop it and then delete it
                 self.stop_topology(topo, "topology has been deleted")
-                je.topology.delete()
+                DBService.run_in_db_thread(je.topology.delete)
 
         reactor.callLater(30, self.periodic_callback)
 
@@ -245,25 +272,27 @@ class VNSSimulator:
                           (str_addr, ','.join([str(t.id) for t in topos]), pktstr(packet)))
             for topo in topos:
                 topo.create_job_for_incoming_packet(packet, rewrite_dst_mac)
+                logging.info("Poking queue service thread %f" % time())
                 self.job_available_event.set()
 
     def handle_recv_msg(self, conn, vns_msg):
         if vns_msg is not None:
             logging.debug('recv VNS msg: %s' % vns_msg)
-            if vns_msg.get_type() == VNSAuthReply.get_type():
+            t = vns_msg.get_type()
+            if t == VNSAuthReply.get_type():
                 self.handle_auth_reply(conn, vns_msg, self.terminate_connection)
                 return
             elif not conn.vns_authorized:
                 logging.warning('received non-auth-reply from unauthenticated user %s: terminating the user' % conn)
                 self.terminate_connection(conn, 'simulator expected authentication reply')
             # user is authenticated => any other messages are ok
-            elif vns_msg.get_type() == VNSOpen.get_type():
-                self.handle_open_msg(conn, vns_msg)
-            elif vns_msg.get_type() == VNSClose.get_type():
-                self.handle_close_msg(conn)
-            elif vns_msg.get_type() == VNSPacket.get_type():
+            elif t == VNSPacket.get_type():
                 self.handle_packet_msg(conn, vns_msg)
-            elif vns_msg.get_type() == VNSOpenTemplate.get_type():
+            elif t == VNSOpen.get_type():
+                self.handle_open_msg(conn, vns_msg)
+            elif t == VNSClose.get_type():
+                self.handle_close_msg(conn)
+            elif t == VNSOpenTemplate.get_type():
                 self.handle_open_template_msg(conn, vns_msg)
             else:
                 logging.debug('unexpected VNS message received: %s' % vns_msg)
@@ -273,7 +302,7 @@ class VNSSimulator:
         The first element is None and the second is a string if an error occurs;
         otherwise the first element is the topology."""
         try:
-            topo = Topology(tid, self.raw_socket, client_ip, user)
+            topo = DBService.run_and_wait(lambda: Topology(tid, self.raw_socket, client_ip, user))
             topo.interactors = [] # list of TI connections to this topo
         except TopologyCreationException as e:
             return (None, str(e))
@@ -329,7 +358,7 @@ class VNSSimulator:
                 with self.topologies_lock:
                     del self.topologies[tid]
                     self.topologies_changed = True
-                topo.get_stats().finalize()
+                DBService.run_and_wait(topo.get_stats().finalize)
                 if topo.is_temporary():
                     AddressAllocation.free_topology(tid)
                 else:
@@ -369,7 +398,7 @@ class VNSSimulator:
         """Sends a message to a newly connected client, if such a a message is set."""
         # see if there is any admin message to be sent to a client upon connecting
         try:
-            msg_for_client = db.SystemInfo.objects.get(name='motd').value
+            msg_for_client = DBService.run_and_wait(lambda: db.SystemInfo.objects.get(name='motd')).value
             logging.info('sending message to clients: %s' % msg_for_client)
             for m in VNSBanner.get_banners(msg_for_client):
                 conn.send(m)
@@ -378,13 +407,13 @@ class VNSSimulator:
 
     def handle_open_template_msg(self, conn, ot):
         try:
-            template = db.TopologyTemplate.objects.get(name=ot.template_name)
+            template = DBService.run_and_wait(db.TopologyTemplate.objects.get(name=ot.template_name))
         except db.TopologyTemplate.DoesNotExist:
             self.terminate_connection(conn, "template '%s' does not exist" % ot.template_name)
             return
 
         # find an IP block to allocate IPs from for this user
-        blocks = db.IPBlock.objects.filter(org=conn.vns_user_profile.org)
+        blocks = DBService.run_and_wait(db.IPBlock.objects.filter(org=conn.vns_user_profile.org))
         if not blocks:
             self.terminate_connection(conn, "your organization (%s) has no available IP blocks" % conn.vns_user_profile.org)
             return
@@ -411,8 +440,8 @@ class VNSSimulator:
     @staticmethod
     def build_rtable(topo, s2intfnum):
         # TODO: write this function for real; just a quick hack for now
-        s1 = db.IPAssignment.objects.get(topology=topo, port__node=db.Node.objects.get(template=topo.template, name='Server1'))
-        s2 = db.IPAssignment.objects.get(topology=topo, port__node=db.Node.objects.get(template=topo.template, name='Server2'))
+        s1 = DBService.run_and_wait(lambda:db.IPAssignment.objects.get(topology=topo, port__node=db.Node.objects.get(template=topo.template, name='Server1')))
+        s2 = DBService.run_and_wait(lambda:db.IPAssignment.objects.get(topology=topo, port__node=db.Node.objects.get(template=topo.template, name='Server2')))
         return '\n'.join(['0.0.0.0  172.24.74.17  0.0.0.0  eth0',
                           '%s  %s  255.255.255.254  eth1' % (s1.ip, s1.ip),
                           '%s  %s  255.255.255.254  eth%s' % (s2.ip, s2.ip, s2intfnum)])
@@ -432,7 +461,7 @@ class VNSSimulator:
             return
 
         try:
-            up = db.UserProfile.objects.get(user__username=ar.username, retired=False)
+            up = DBService.run_and_wait(lambda:db.UserProfile.objects.get(user__username=ar.username, retired=False))
         except db.UserProfile.DoesNotExist:
             logging.info('unrecognized username tried to login: %s' % ar.username)
             terminate_connection(conn, "authentication failed")
@@ -488,7 +517,7 @@ class VNSSimulator:
         """Cleanly terminate connected clients and then forcibly terminate the program."""
         # see if the admin put a reason for the shutdown in the database
         try:
-            why = db.SystemInfo.objects.get(name='shutdown_reason').value
+            why = DBService.run_and_wait(lambda:db.SystemInfo.objects.get(name='shutdown_reason')).value
         except db.SystemInfo.DoesNotExist:
             why = 'the simulator is shutting down'
 

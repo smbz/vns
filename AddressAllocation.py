@@ -7,22 +7,25 @@ from socket import inet_aton, inet_ntoa
 import struct
 
 import web.vnswww.models as db
+import DBService
 
 def free_topology(tid):
     """Deletes the topology associated with tid, as well as any IPAssignment,
     MACAssignment, TopologySourceIPFilter, TopologyUserFilter, and
     IPBlockAllocation objects belonging to it."""
-    try:
-        topo = db.Topology.objects.get(pk=tid)
-        db.TopologySourceIPFilter.objects.filter(topology=topo).delete()
-        db.TopologyUserFilter.objects.filter(topology=topo).delete()
-        db.IPAssignment.objects.filter(topology=topo).delete()
-        db.MACAssignment.objects.filter(topology=topo).delete()
-        db.IPBlockAllocation.objects.filter(topology=topo).delete()
-        topo.delete()
-        logging.info('freed topology %d' % tid)
-    except db.Topology.DoesNotExist:
-        logging.warning('asked to free non-existent topology %d' % tid)
+    def run():
+        try:
+            topo = db.Topology.objects.get(pk=tid)
+            db.TopologySourceIPFilter.objects.filter(topology=topo).delete()
+            db.TopologyUserFilter.objects.filter(topology=topo).delete()
+            db.IPAssignment.objects.filter(topology=topo).delete()
+            db.MACAssignment.objects.filter(topology=topo).delete()
+            db.IPBlockAllocation.objects.filter(topology=topo).delete()
+            topo.delete()
+            logging.info('freed topology %d' % tid)
+        except db.Topology.DoesNotExist:
+            logging.warning('asked to free non-existent topology %d' % tid)
+    DBService.run_in_db_thread(run)
 
 class IPError(Exception):
     pass
@@ -39,7 +42,7 @@ def allocate_to_topology(topo, ip_block_from, owner, use_first_available=False, 
 
     # Check we don't have any IPs already
     try:
-        _ = db.IPBlockAllocation.objects.get(topology=topo)
+        _ = DBService.run_and_wait(lambda:db.IPBlockAllocation.objects.get(topology=topo))
     except db.IPBlockAllocation.DoesNotExist:
         pass
     else:
@@ -49,7 +52,8 @@ def allocate_to_topology(topo, ip_block_from, owner, use_first_available=False, 
     # Get the template this topology was created from, and the topology's source
     # filters
     template = topo.template
-    src_filters = [(sif.ip, sif.mask) for sif in db.TopologySourceIPFilter.objects.filter(topology=topo)]
+    filters = DBService.run_and_wait(lambda:db.TopologySourceIPFilter.objects.filter(topology=topo))
+    src_filters = [(sif.ip, sif.mask) for sif in filters]
 
     # build a depth-first "tree" of the topology from the port connected to the gateway
     root = template.get_root_port()
@@ -61,7 +65,7 @@ def allocate_to_topology(topo, ip_block_from, owner, use_first_available=False, 
     except:
         # topology graph has cycles - just make each link its own /31
         tree = None
-        links = db.Link.objects.filter(port1__node__template=template)
+        links = DBService.run_and_wait(lambda:db.Link.objects.filter(port1__node__template=template))
         num_addrs = len(links) * 2
 
     # try to give the user the allocation they most recently had
@@ -94,31 +98,39 @@ def allocate_to_topology(topo, ip_block_from, owner, use_first_available=False, 
         ra.template = template
         ra.start_addr = alloc.start_addr
         ra.mask = alloc.mask
-        ra.save()
+        # Save and wait for it - we wait because we need the ID for the next bit
+        DBService.run_and_wait(ra.save)
 
     # Add the assignments to the database
+    wait_for = []
     for port, ip, mask_sz in assignments:
         ipa = db.IPAssignment()
         ipa.topology = topo
         ipa.port = port
         ipa.ip = inet_ntoa(struct.pack('>I', ip))
         ipa.mask = mask_sz
-        ipa.save()
+        waiter = DBService.run_background(ipa.save)
+        wait_for.append(waiter)
         logging.info('IP assignment for topology %d: %s' % (topo.id, ipa))
+
+    # Wait for all the DB transactions to complete
+    for waiter in wait_for:
+        waiter()
 
 def deallocate_from_topology(topo):
     """Removes any IP allocations and assignments from a topology."""
     # Check that the topology is not active
     try:
-        _ = db.UsageStats.objects.get(topo_uuid=topo.uuid, active=True)
+        _ = DBService.run_and_wait(lambda:db.UsageStats.objects.get(topo_uuid=topo.uuid, active=True))
     except db.UsageStats.DoesNotExist:
         pass
     else:
         raise IPError("Cannot deallocate addresses while topology is in use")
     
-    iba = db.IPBlockAllocation.objects.get(topology=topo)
+    iba = DBService.run_and_wait(lambda:db.IPBlockAllocation.objects.get(topology=topo))
     iba.delete()
-    for ia in db.IPAssignment.objects.filter(topology=topo):
+    assignments = DBService.run_and_wait(lambda:db.IPAssignment.objects.filter(topology=topo))
+    for ia in assignments:
         ia.delete()
 
 def instantiate_template(org, owner, template, ip_block_from, src_filters, temporary,
@@ -142,7 +154,7 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
     t.public = public
     t.temporary = temporary
     t.ip_block = ip_block_from
-    t.save()
+    DBService.run_and_wait(t.save)
     logging.info("Instantiated a new topology for %s from '%s'" % (owner, t.template.name))
 
     for sf_ip, sf_mask in src_filters:
@@ -150,7 +162,7 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
         tsif.topology = t
         tsif.ip = sf_ip
         tsif.mask = sf_mask
-        tsif.save()
+        db.run_in_db_thread(tsif.save)
         logging.info('IP source filter for new topology %d: %s' % (t.id, tsif))
 
     return (None, t, None, None)
@@ -167,7 +179,7 @@ def allocate_ip_block(block_from, num_blocks_to_alloc, num_addrs_per_block, src_
 
 def __allocate_ip_block(block_from, num_blocks_to_alloc, min_block_mask_bits, src_filters, use_first_available):
     # find the allocations we need to workaround to avoid collisions ("allocations of concern")
-    db_allocs = db.IPBlockAllocation.objects.filter(block_from=block_from)
+    db_allocs = DBService.run_and_wait(lambda:db.IPBlockAllocation.objects.filter(block_from=block_from))
     allocations = [(__str_ip_to_int(a.start_addr), a.mask) for a in db_allocs]
     #ip_mask_list = [(__str_ip_to_int(sf_ip), sf_mask) for sf_ip, sf_mask in src_filters]
     #aoc = filter(lambda alloc : __allocs_filter(alloc, ip_mask_list), allocations)
@@ -221,7 +233,7 @@ def __allocate_ip_block(block_from, num_blocks_to_alloc, min_block_mask_bits, sr
             new_alloc.topology = None
             new_alloc.start_addr = inet_ntoa(struct.pack('>I', aligned_aa))
             new_alloc.mask = min_block_mask_bits
-            new_alloc.save()
+            DBService.run_and_wait(new_alloc.save)
             logging.info('Allocated new block of addresses: %s' % new_alloc)
             new_allocations.append(new_alloc)
             if len(new_allocations) == num_blocks_to_alloc:
@@ -237,7 +249,7 @@ def __allocs_filter(alloc, other_ip_mask_list):
     if not other_ip_mask_list:
         return True # empty list => 0/0 => overlaps with everything
 
-    alloc_src_filters = db.TopologySourceIPFilter.objects.filter(topology=alloc.topology)
+    alloc_src_filters = DBService.run_and_wait(lambda:db.TopologySourceIPFilter.objects.filter(topology=alloc.topology))
     if not alloc_src_filters:
         return True # empty list => 0/0 => overlaps with everything
 
@@ -268,7 +280,7 @@ def __realloc_if_available(owner, template, ip_block_from):
     from ip_block_from.  If so, then previously allocated block is checked to
     see if it is available.  If so, then it is allocated and returned.
     Otherwise, None is returned.  Any record of a recent allocation is deleted."""
-    recent_allocs = db.RecentIPBlockAllocation.objects.filter(user=owner, template=template)
+    recent_allocs = DBService.run_and_wait(lambda:db.RecentIPBlockAllocation.objects.filter(user=owner, template=template))
     if recent_allocs:
         ra = recent_allocs[0]
         ret = __realloc_if_available_work(ra, ip_block_from)
@@ -282,6 +294,10 @@ def __realloc_if_available(owner, template, ip_block_from):
         return None
 
 def __realloc_if_available_work(ra, ip_block_from):
+    # Start a database query for the IP block allocations which we'll need later
+    closest_pre_alloc_wait = DBService.run_background(lambda:db.IPBlockAllocation.objects.filter(start_addr__lte=ra.start_addr).order_by('-start_addr')[0])
+    print closest_pre_alloc_wait
+    
     # the recent allocation must be from the block we're trying to allocate from
     start_addr = struct.unpack('>I', inet_aton(ra.start_addr))[0]
     start_addr_from = struct.unpack('>I', inet_aton(ip_block_from.subnet))[0]
@@ -291,13 +307,13 @@ def __realloc_if_available_work(ra, ip_block_from):
     # the recent allocation must not be in use
     try:
         # does the closest active allocation BEFORE the recent alloc overlap it?
-        closest_pre_alloc = db.IPBlockAllocation.objects.filter(start_addr__lte=ra.start_addr).order_by('-start_addr')[0]
+        closest_pre_alloc = closest_pre_alloc_wait()
         sa_pre = struct.unpack('>I', inet_aton(closest_pre_alloc.start_addr))[0]
         if is_overlapping(start_addr, ra.mask, sa_pre, closest_pre_alloc.mask):
             return None
 
         # does the closest active allocation AFTER to the recent alloc overlap it?
-        closest_post_alloc = db.IPBlockAllocation.objects.filter(start_addr__gte=ra.start_addr).order_by('start_addr')[0]
+        closest_post_alloc = DBService.run_and_wait(lambda:db.IPBlockAllocation.objects.filter(start_addr__gte=ra.start_addr).order_by('start_addr')[0])
         sa_post = struct.unpack('>I', inet_aton(closest_post_alloc.start_addr))[0]
         if is_overlapping(start_addr, ra.mask, sa_post, closest_post_alloc.mask):
             return None
@@ -310,7 +326,7 @@ def __realloc_if_available_work(ra, ip_block_from):
     new_alloc.topology = None
     new_alloc.start_addr = ra.start_addr
     new_alloc.mask = ra.mask
-    new_alloc.save()
+    DBService.run_and_wait(new_alloc.save)
     logging.info('RE-allocated new block of addresses: %s' % new_alloc)
     return new_alloc
 
