@@ -1,0 +1,74 @@
+\documentclass[a4paper,12pt]{article}
+
+\begin{document}
+
+\title{Using the Clack Graphical Router with VNS}
+\date{4th August 2011}
+
+\section{Creating Topology Templates for Clack}
+Clack is fairly specific about topology of the network it is given:
+\begin{itemize}
+\item The gateway node must be named \texttt{Gateway}.  This will appear as a
+firewall, and must have just one interface.
+\item Although Clack shows an ``Internet'' node on the screen, this has no
+counterpart within VNS, and should not be created.
+\end{itemize}
+
+\section{Interaction Between Clack and VNS}
+Clack is configured with XML files retrieved from the VNS server.  There are two
+of these files: one gives Clack its internal configuration and the other gives
+it the topology inside the VNS server.
+
+\subsection{Clack configuration XML}
+The first file, the Clack configuration, contains (among other things) the
+layout of the network graph on the screen and the connection of components
+inside the router part of clack.  Every node that appears in the VNS topology
+must have an entry for its location on the screen in the Clack configuration
+XML or Clack will refuse to load it.
+
+The Clack configuration file also contains a topology number and the URL of the
+VNS configuration file.  The topology number specifies a range of topologies,
+e.g. ``10-20''.  The VNS configuration URL has, for recent versions of VNS, an
+authentication token which is submitted by HTTP GET to ensure that the user is
+permitted to access the VNS configuration for the specified topology.
+
+The Clack configuration XML also contains the username and authentication token
+of the user to allow them to log on to VNS.
+
+\subsection{VNS configuration XML}
+The second file specifies the topology layout as understood by VNS.  Clack uses
+this to create default routing tables, show information about each node, etc.
+Note that the address of the gateway is specified in the Clack configuration
+file in \texttt{net/clackrouter/jgraph/pad/resources/Clack.properties} under
+\texttt{FIREWALL\_ADDRESS}, and this setting takes priority over the XML sent by
+the VNS web server.  The \texttt{VNS\_SERVER\_ADDRESS} property in the same file
+specifies the default VNS server address, and although it is not necessary to
+change this it is recommended.
+
+\subsection{Building Clack}
+The Clack source code is (at time of writing) hosted at
+\texttt{http://yuba.stanford.edu/vns/clack/} and
+\texttt{http://gitorious.org/clack-graphical-router}.
+
+Before building Clack, you will most likely want to change the default server
+and gateway as described above.  If you intend to run Clack as an applet, you
+will also need to create a keystore and put a key in it; this can be done by
+running \texttt{\$ keytool -genkey -alias clack -keystore clackkeystore} in the
+Clack root directory.  The password for the keystore should be ``stanford''.
+
+To actually build Clack, run \texttt{\$ ant dist}; this will create a dist
+directory containing (among other things) several zip files, one of which
+contains \texttt{clack-\$\{VERSION\}.jar}.  This is the jar file which needs to
+be linked to from the applet.
+
+The HTML for linking to the applet is something like this:
+
+\begin{verbatim}
+<applet code="net.clackrouter.gui.ClackLoader.class"
+        archive="clack-1.7.2.jar">
+  <param name="parameters"
+         value="-u http://vns.server/topology123/xml/" />
+</applet>
+\end{verbatim}
+
+\end{document}
