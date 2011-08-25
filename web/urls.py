@@ -57,6 +57,8 @@ dict_topology_user_remove=make_access_check_dict(topology_permitted_user_remove,
 dict_topology_readme    = make_access_check_dict(topology_readme, "use")
 dict_topology_rtable    = make_access_check_dict(topology_rtable, "use")
 dict_topology_to_xml    = make_access_check_dict(topology_to_xml, "use")
+dict_topology_clack_xml = make_access_check_dict(topology_clack_xml, "use")
+dict_topology_clack     = make_access_check_dict(topology_run_clack, "use")
 
 # dictionaries which specify access requirements for various user/org views
 dict_user_create    = make_access_check_dict(user_create, "add")
@@ -108,7 +110,8 @@ urlpatterns = patterns('web.vnswww.views',
     (r'^topology(?P<tid>\d+)/delete/?$',                topology_access_check, dict_topology_delete),
     (r'^topology(?P<tid>\d+)/readme/?$',                topology_access_check, dict_topology_readme),
     (r'^topology(?P<tid>\d+)/rtable/?$',                topology_access_check, dict_topology_rtable),
-    (r'^topology(?P<tid>\d+)/xml/?$',                   topology_access_check, dict_topology_to_xml),
+    (r'^topology(?P<tid>\d+)/xml/?$',                   topology_access_check, dict_topology_clack_xml),
+    (r'^topology(?P<tid>\d+)/clack/?$',                 topology_access_check, dict_topology_clack),
     (r'^topology=(?P<tid>\d+)/?$',                      topology_access_check, dict_topology_to_xml),
     (r'^templates/?$',                                  topologytemplate_list),
     (r'^template/create/?$',                            topologytemplate_access_check, dict_topologytemplate_create),

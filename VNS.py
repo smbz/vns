@@ -123,7 +123,6 @@ class VNSSimulator:
         local_job_queues_list = []
 
         while True:
-            logging.info("Servicing topology queues %f" % time())
 
             # whether or not a job has been serviced on this loop
             serviced_a_job = False
@@ -139,9 +138,7 @@ class VNSSimulator:
                 job = q.start_service()
                 while job:
                     # thread safety: run each job from the main twisted event loop
-                    print("Running job %f" % time())
                     self.__return_after_running_job_on_main_thread(job)
-                    print("Finished running job %f" % time())
                     job = q.task_done()
                     serviced_a_job = True
 
@@ -154,32 +151,24 @@ class VNSSimulator:
                 if self.job_available_event.is_set():
                     self.job_available_event.clear()
                 else:
-                    logging.info("Waiting for more jobs %f" % time())
                     self.job_available_event.wait()
-                    logging.info("Finished waiting %f" % time())
 
     def __do_job_then_notify(self, job):
         """Acquires the service_condition lock, runs job, and the notifies all
         threads waiting on service_condition."""
-        print("Waiting for service_condition (2)")
         with self.service_condition:
-            print("Calling job")
             job()
-            print("Finished doing job in main thread")
             self.service_condition.notifyAll()
 
     def __return_after_running_job_on_main_thread(self, job):
         """Requests that job be run on the main thread.  Waits on
         service_condition until it is notified that the job is done."""
-        print("Waiting for service_condition (1)")
         with self.service_condition:
             # ask the main thread to run our job (it cannot start until we release this lock)
-            print("Calling job from main thread")
             reactor.callFromThread(lambda : self.__do_job_then_notify(job))
 
             # wait for the main thread to finish running the job
             self.service_condition.wait()
-            print("Finished doing job in service thread")
 
     def __start_raw_socket(self, dev):
         """Starts a socket for sending raw Ethernet frames."""

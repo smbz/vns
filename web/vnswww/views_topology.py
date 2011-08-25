@@ -1,12 +1,14 @@
 from socket import inet_ntoa
 import struct
+import threading
+import urllib2
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.views.generic.simple import direct_to_template
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect, Http404
 from SubnetTree import SubnetTree
 
 import models as db
@@ -14,6 +16,7 @@ import permissions
 import crypto
 from vns.AddressAllocation import instantiate_template
 from vns.Topology import Topology as VNSTopology
+from vns import DBService
 
 def make_ctform(user):
     user_org = user.get_profile().org
@@ -67,6 +70,9 @@ def topology_create(request):
 
             # TODO: should validate that request.user can use the requested
             #       template and IP block
+
+            # Tell the DBService that we want to make the database calls from this thread
+            DBService.thread = threading.current_thread()
 
             # try to create the topologies
             src_filters = []
@@ -172,9 +178,12 @@ def topology_access_check(request, callee, action, **kwargs):
     
 
 def topology_info(request, tid, topo):    
-    # Create an authentication token valid for 30 minutes for the user to access
-    # Clack stuff with
-    token = crypto.create_token(request.user, 1800)
+    # Create an authentication token valid for 3 minutes for the user to access
+    # Clack stuff with, or use the current token if there is one
+    try:
+        token = request.GET['token']
+    except KeyError:
+        token = crypto.create_token(request.user, 180)
     
     # See what permissions the user has on this topology
     can_change = permissions.allowed_topology_access_change(request.user, topo)
@@ -339,6 +348,11 @@ def topology_to_xml(request, tid, topo):
     @param request  An HTTP request
     @param tid  Database ID of the topology to convert to XML
     @param topo  The topology to convert to XML"""
+
+    # Tell the DBService that we want to access the database from the current
+    # thread
+    DBService.thread = threading.current_thread()
+
     # The argument topo is the DB's Topology object passed from the access  
     # checker - ignore it and instead create the needed vns.Topology object.
     topo = VNSTopology(tid, None, None, request.user, False)
@@ -373,3 +387,47 @@ def topology_to_xml(request, tid, topo):
     # build the topology's XML
     xml = '<topology id="%d" server="%s" port="3250">\n%s</topology>' % (topo.id, request.META['SERVER_NAME'], nodes_xml)
     return HttpResponse(xml, mimetype='text/xml')
+
+def topology_clack_xml(request, tid, topo):
+    """Creates XML that can be loaded with the Clack Graphical Router.  Note
+    that this is different to the XML generated above: it tells Clack how to
+    retrieve the XML generated above, and how to layout the components in the
+    graphical view, etc.  Most of the information is retrieved from a template,
+    and formatted by replacing $TOKEN with an authentication token and $AUTH_KEY
+    and $USERNAME with the user's simulation authentication key and username."""
+
+    # Get the template
+    try:
+        template = urllib2.urlopen("http://localhost/media/clack/template-%s.xml" % topo.template.name).read()
+    except urllib2.URLError:
+        raise
+
+    # Generate an authentication token, or use the one we currently have; if we
+    # make a new one, it's valid for 30 seconds
+    try:
+        token = request.GET['token']
+    except KeyError:
+        token = crypto.create_token(request.user, 30)
+
+    # Format the XML
+    template = template.replace("$TOKEN", token, 1)
+    template = template.replace("$AUTH_KEY", request.user.get_profile().sim_key, 1)
+    template = template.replace("$USERNAME", request.user.username, 1)
+    template = template.replace("$TOPOLOGY", str(tid), 2)
+
+    # Return it
+    return HttpResponse(template, "text/xml")
+
+def topology_run_clack(request, tid, topo):
+    """Runs clack from an applet for this topology"""
+
+    tn = 'vns/clack.html'
+
+    # Generate an authentication token valid for 30 seconds, or use the one we
+    # currently have
+    try:
+        token = request.GET['token']
+    except KeyError:
+        token = crypto.create_token(request.user, 30)
+
+    return direct_to_template(request, tn, {'tid':tid, 'token':token})

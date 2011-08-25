@@ -9,6 +9,7 @@ from web.vnswww import models as db
 
 queue = PriorityQueue()
 new_items = Event()
+thread = None
 
 
 def start():

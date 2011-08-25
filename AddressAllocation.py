@@ -25,7 +25,7 @@ def free_topology(tid):
             logging.info('freed topology %d' % tid)
         except db.Topology.DoesNotExist:
             logging.warning('asked to free non-existent topology %d' % tid)
-    DBService.run_in_db_thread(run)
+    DBService.run_background(run)
 
 class IPError(Exception):
     pass
