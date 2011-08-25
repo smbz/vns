@@ -2,7 +2,7 @@ import os
 import socket
 from ConfigParser import RawConfigParser, NoSectionError, NoOptionError
 
-DEBUG = TEMPLATE_DEBUG = True
+DEBUG = TEMPLATE_DEBUG = False
 
 # information about who to e-mail and how in case of a problem
 ADMINS = []
