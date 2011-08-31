@@ -76,7 +76,23 @@ except the one that received the packet.</li>
 Every type can also take an optional integer argument at the end of the line 
 which specifies the offset of the node's IP address(es) from the start of the 
 block the topology is assigned.  One IP address is assigned to each interface 
-whether or not this argument is present.</p>"""
+whether or not this argument is present.</p>
+
+<p>The README and rtable strings have the ability to substitute for the IPs of
+nodes.  The same substitutions are available in both.  Available substitutions
+are:
+<ul>
+  <li>$&lt;node&gt;.&lt;intf&gt;.ip  The IP address of the given interface</li>
+  <li>$&lt;node&gt;.&lt;intf&gt;.ip15  The IP address of the given interface, 
+  right-padded with spaces until it is 15 characters long.</li>
+  <li>$&lt;node&gt;.&lt;intf&gt;.ip15R  The IP address of the given interface, 
+  left-padded with spaces until it is 15 characters long.</li>
+  <li>$topo.id  The ID number of the topology.</li>
+  <li>$topo.gatewayip  The IP address of the gateway.</li>
+  <li>$topo.gatewayip15  The IP address of the gateway, right-padded with spaces
+  to 15 characters.</li>
+</ul>
+"""
 
 
 DOC_GROUP_EMAIL = """
@@ -117,8 +133,27 @@ webserver web2 .
 Gateway.eth0 = vrhost.eth0
 web1.eth0 = vrhost.eth1
 web2.eth0 = vrhost.eth2""",
-"no readme",
-"no routing table")
+"""Topology $topo.id looks like this:
+
+                                                                          +---------------------+
+                                                                          |                     |
+                                                                          |      Web server 1   |
+                                                    $vrhost.eth1.ip15       |      Name: "web1"   |
+ +------------------------+         +----------------------+       /------|eth0                 |
+ |                        |         |                  eth1|------/       +---------------------+
+ |  Internet gateway      |         |      Virtual node    |           $web1.eth0.ip
+ |  Name: "Gateway"   eth0|---------|eth0  Name: "vrhost"  |           $web2.eth0.ip
+ |                        |         |                  eth2|------\       +---------------------+
+ +------------------------+         +----------------------+       \------|eth0                 |
+                $topo.gatewayip15   $vrhost.eth0.ip15   $vrhost.eth2.ip15       |      Web server 2   |
+                                                                          |      Name: "web2"   |
+                                                                          |                     |
+                                                                          +---------------------+
+""",
+"""0.0.0.0 $topo.gatewayip 0.0.0.0 eth0
+$web1.eth0.ip $web1.eth0.ip 255.255.255.255 eth1
+$web2.eth0.ip $web2.eth0.ip 255.255.255.255 eth2
+""")
 
 TEMPLATE_PWOSPF = ("""
 gateway Gateway
