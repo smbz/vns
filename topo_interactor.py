@@ -35,6 +35,9 @@ Connects to the VNS Topology Interaction service."""
     parser.add_option("-a", "--auth_key_file",
                       default='auth_key',
                       help="File containing your auth key [default:%default]")
+    parser.add_option("-p", "--port",
+                      default=TI_DEFAULT_PORT,
+                      help="Port on the VNS server to connect to")
 
     (options, args) = parser.parse_args(argv)
     if len(args) > 0:
@@ -56,7 +59,7 @@ Connects to the VNS Topology Interaction service."""
     # connect to the server and handle messages it sends us
     print 'Connecting to VNS server at %s ...' % options.server
     client = TIClient(options.topo_id, options.username, auth_key)
-    client.connect(options.server, TI_DEFAULT_PORT)
+    client.connect(options.server, int(options.port))
     reactor.run()
 
 class TIClient(LTTwistedClient):

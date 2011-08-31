@@ -261,7 +261,6 @@ class VNSSimulator:
                           (str_addr, ','.join([str(t.id) for t in topos]), pktstr(packet)))
             for topo in topos:
                 topo.create_job_for_incoming_packet(packet, rewrite_dst_mac)
-                logging.info("Poking queue service thread %f" % time())
                 self.job_available_event.set()
 
     def handle_recv_msg(self, conn, vns_msg):
@@ -580,7 +579,7 @@ class VNSSimulator:
         topo.send_ping_from_node(pm.node_name, pm.intf_name, pm.dst_ip)
 
     def handle_ti_tap_msg(self, conn, topo, tm):
-        conf = TapConfig(conn, tm.consume, tm.ip_only)
+        conf = TapConfig(conn, tm.consume, tm.ip_only, tm.bidirectional)
         msg = topo.tap_node(tm.node_name, tm.intf_name, tm.tap, conf)
         conn.send(TIBanner(msg))
 

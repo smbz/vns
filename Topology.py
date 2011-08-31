@@ -459,10 +459,11 @@ class Topology():
         return permissions.allowed_topology_access_use(user, self.t)
 
 class TapConfig(object):
-    def __init__(self, ti_conn, consume=False, ip_only=False):
+    def __init__(self, ti_conn, consume=False, ip_only=False, bidirectional=False):
         self.ti_conn = ti_conn
         self.consume = consume
         self.ip_only = ip_only
+        self.bidirectional = bidirectional
 
     def handle_packet(self, node, intf, pkt):
         """Returns True if the packet is consumed and should not be further handled."""
@@ -518,9 +519,15 @@ class Link:
         """
         if self.lossiness==0.0 or (not self.lossiness>=1.0 and random.random()>self.lossiness):
             intf_to = self.get_other(intf_from)
+            drop = False
             if intf_to.tap:
                 if intf_to.tap.handle_packet(str(intf_to.owner.name), str(intf_to.name), packet):
-                    return  # packet was consumed by the tap
+                    drop = True  # packet was consumed by the tap
+            if intf_from.tap and intf_from.tap.bidirectional:
+                if intf_from.tap.handle_packet(str(intf_from.owner.name), str(intf_from.name), packet):
+                    drop = True
+            if drop:
+                return
             intf_to.owner.handle_packet(intf_to, packet)
 
     def __str__(self):

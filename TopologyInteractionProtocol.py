@@ -123,15 +123,18 @@ class TITap(TINodePortHeader):
     def get_type():
         return 3
 
-    def __init__(self, node_name, intf_name, tap, consume=False, ip_only=False):
+    def __init__(self, node_name, intf_name, tap, consume=False, ip_only=False, bidirectional=False):
         """If tap is True, then packets arriving at the specified node on the
         specified interface will be forwarded to this connection.  If consume is
         True, then any tapped packets will not be sent to the topology too.  If
-        ip_only is True, then only packets with an IP header will be tapped."""
+        ip_only is True, then only packets with an IP header will be tapped.  If
+        bidirectional is True, then packets in both directions on the interface
+        will be tapped."""
         TINodePortHeader.__init__(self, node_name, intf_name)
         self.tap = tap
         self.consume = consume
         self.ip_only = ip_only
+        self.bidirectional = bidirectional
 
     def length(self):
         return TINodePortHeader.length(self) + TITap.SIZE
@@ -141,13 +144,17 @@ class TITap(TINodePortHeader):
 
     def pack(self):
         hdr = TINodePortHeader.pack(self)
-        return hdr + struct.pack(TITap.FORMAT, self.tap, self.consume, self.ip_only)
+        return hdr + struct.pack(TITap.FORMAT, self.tap, self.consume,
+                                 (1 if self.ip_only else 0) | 
+                                 (2 if self.bidirectional else 0))
 
     @staticmethod
     def unpack(body):
         node_name, port_name, body = TINodePortHeader.unpack_hdr(body)
         tap, consume, ip_only = struct.unpack(TITap.FORMAT, body)
-        return TITap(node_name, port_name, tap, consume, ip_only)
+        bidirectional = (ip_only & 2) >> 1
+        ip_only = ip_only & 1
+        return TITap(node_name, port_name, tap, consume, ip_only, bidirectional)
 
     def __str__(self):
         prefix = 'TAP' if self.tap else 'UNTAP'
