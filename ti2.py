@@ -340,6 +340,7 @@ class TopoInteractor(object):
         for (node, intfs) in self.taps.iteritems():
             for (intf, tap) in intfs.iteritems():
                 self.client.send(TITap(node, intf, False).pack())
+                tap.finalise()
 
         # Now close the connection
         self.client.stop()
@@ -436,7 +437,7 @@ class PcapTap(Tap):
         self.file.write(hdr)
         self.file.write(pkt)
 
-    def finalise():
+    def finalise(self):
         """Finalises the tap by closing the output file."""
         self.file.close()
 
