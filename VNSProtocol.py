@@ -127,17 +127,17 @@ class VNSInterface:
     def __init__(self, name, mac, ip, mask):
         self.name = str(name)
         self.mac = str(mac)
-        self.ip = str(ip)
-        self.mask = str(mask)
+        self.ip = None if ip is None else str(ip)
+        self.mask = None if mask is None else str(mask)
 
         if len(mac) != 6:
             raise VNSProtocolException('MAC address must be 6B')
 
-        if len(ip) != 4:
-            raise VNSProtocolException('IP address must be 4B')
+        if ip is not None and len(ip) != 4:
+            raise VNSProtocolException('IP address must be 4B or None')
 
-        if len(mask) != 4:
-            raise VNSProtocolException('IP address mask must be 4B')
+        if mask is not None and len(mask) != 4:
+            raise VNSProtocolException('IP address mask must be 4B or None')
 
     HWINTERFACE = 1  # string
     HWSPEED = 2      # uint32
@@ -146,17 +146,23 @@ class VNSInterface:
     HWETHIP = 64     # uint32
     HWMASK = 128     # uint32
 
-    FORMAT = '> I32s II28s I32s I4s28s II28s I4s28s'
+    FORMAT = '> I32s II28s I32s'
+    IP_FORMAT = '> I4s28s II28s I4s28s'
     SIZE = struct.calcsize(FORMAT)
 
     def pack(self):
-        return struct.pack(VNSInterface.FORMAT,
+        main = struct.pack(VNSInterface.FORMAT,
                            VNSInterface.HWINTERFACE, self.name,
                            VNSInterface.HWSPEED, 0, '',
-                           VNSInterface.HWETHER, self.mac,
-                           VNSInterface.HWETHIP, self.ip, '',
-                           VNSInterface.HWSUBNET, 0, '',
-                           VNSInterface.HWMASK, self.mask, '')
+                           VNSInterface.HWETHER, self.mac)
+
+        if self.ip is not None and self.mask is not None:
+            return main + struct.pack(VNSInterface.IP_FORMAT,
+                                      VNSInterface.HWETHIP, self.ip, '',
+                                      VNSInterface.HWSUBNET, 0, '',
+                                      VNSInterface.HWMASK, self.mask, '')
+        else:
+            return main
 
     def __str__(self):
         fmt = '%s: mac=%s ip=%s mask=%s'

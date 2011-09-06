@@ -7,6 +7,7 @@ except ImportError:
 
 import datetime
 import hashlib
+import logging
 import math
 import random
 import re
@@ -382,13 +383,17 @@ class PortTreeNode():
             mask = parent_mask
 
         # give myself the lowest address in this subnet
-        ret = [(self.port, start_addr, mask)]
-        start_addr += 1
+        if self.port.ip_offset == -1:
+            ret = []
+        else:
+            ret = [(self.port, start_addr, mask)]
+            start_addr += 1
 
         # give my subtrees addresses from the end of my block (go from large to small)
         num_addrs = 1 << self.unmask_sz # 2 ** unmask_sz
+        if self.port.ip_offset != -1: num_addrs -= 1
         for st in sorted(self.subtree):
-            st_start = start_addr + num_addrs - st.sz - 1
+            st_start = start_addr + num_addrs - st.sz
             ret += st.assign_addr(st_start, self.port.node, mask)
             num_addrs -= st.sz
         return ret
@@ -397,7 +402,7 @@ class PortTreeNode():
         """Computes the number of ports in this subnet and all sub-subnets.  If
         must_be_power_of_2 is True, then each subnet will be rounded up to the
         nearest power of 2."""
-        self.sz = 1 # count self.port
+        self.sz = 0 if self.port.ip_offset == -1 else 1 # count self.port
         for ptn in self.subtree:
             self.sz += ptn.compute_subnet_size(must_be_power_of_2)
 

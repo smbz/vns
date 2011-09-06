@@ -1,5 +1,6 @@
 import hashlib
 import logging
+import os
 import Queue
 import random
 import socket
@@ -23,6 +24,10 @@ import web.vnswww.models as db
 from web.vnswww import permissions
 
 MAX_JOBS_PER_TOPO = 25
+
+# Timeouts for ARP cache entries and ARP requests, in seconds
+ARP_CACHE_TIMEOUT = 5
+ARP_REQUEST_TIMEOUT = 5
 
 class ConnectionReturn():
     def __init__(self, fail_reason=None, prev_client=None):
@@ -57,12 +62,10 @@ class Topology():
         # a list of packets destined to the first hop pending an ARP translation
         self.pending_incoming_packets = []
 
-        # last time an ARP translation was completed / requested
-        self.last_arp_translation = 0
-        self.last_arp_translation_request = 0
-
-        # current ARP translation
-        self.arp_translation = None
+        # current ARP translations - this maps a string representing an IP (e.g.
+        # '\x12\x34\x56\x78' for 18.52.86.120 to a tuple of the form
+        # (mac, last_updated, last_request); mac and last_updated can be None
+        self.arp_cache = {}
 
         self.t = db.Topology.objects.get(pk=tid)
         if not self.t.enabled:
@@ -139,12 +142,23 @@ class Topology():
             mac = ''.join([struct.pack('>B', int(b, 16)) for b in sim.gatewayMAC.split(':')])
             return (mac, ip, '\x00\x00\x00\x00')
         else:
-            ipa = db.IPAssignment.objects.get(topology=t, port=dp)
+            try:
+                ipa = db.IPAssignment.objects.get(topology=t, port=dp)
+            except db.IPAssignment.DoesNotExist:
+                ipa = None
+
             try:
                 mac = db.MACAssignment.objects.get(topology=t, port=dp).get_mac()
             except db.MACAssignment.DoesNotExist:
-                mac = ipa.get_mac(self.mac_salt)
-            return (mac, ipa.get_ip(), ipa.get_mask())
+                if ipa is not None:
+                    mac = ipa.get_mac(self.mac_salt)
+                else:
+                    mac = os.urandom(6);
+
+            if ipa is not None:
+                return (mac, ipa.get_ip(), ipa.get_mask())
+            else:
+                return (mac, None, None)
 
     def connect_client(self, client_conn, client_user, requested_name):
         """Called when a user tries to connect to a node in this topology.
@@ -188,7 +202,7 @@ class Topology():
         for node in self.nodes:
             if node is not self.gateway:
                 for intf in node.interfaces:
-                    addrs.append(intf.ip)
+                    if intf.ip: addrs.append(intf.ip)
         return addrs
 
     def get_my_ip_block(self):
@@ -259,49 +273,101 @@ class Topology():
         if gw_intf:
             self.stats.note_pkt_to_topo(len(packet))
             if rewrite_dst_mac:
-                if self.is_arp_cache_valid():
-                    new_dst_mac = self.arp_translation
-                    gw_intf.link.send_to_other(gw_intf, new_dst_mac + packet[6:])
+                
+                # Try to get the next hop IP for this packet; if we can't find
+                # one, log and drop it
+                try:
+                    ip = self.get_next_hop(packet)
+                except ValueError:
+                    # Couldn't find the next IP for this packet
+                    logging.debug("Dropped packet: unable to resolve to IP")
+                    return
+
+                # Try to get the MAC for this IP from the ARP cache and send the
+                # packet; if there's no entry in the cache, send an arp request
+                new_dst_mac = self.get_arp_cache_entry(ip)
+                if new_dst_mac is None:
+                    self.need_arp_translation_for_pkt(packet, ip)
                 else:
-                    self.need_arp_translation_for_pkt(packet)
+                    gw_intf.link.send_to_other(gw_intf, new_dst_mac + packet[6:])
+
             else:
                 gw_intf.link.send_to_other(gw_intf, packet)
 
-    def need_arp_translation_for_pkt(self, ethernet_frame):
+    def need_arp_translation_for_pkt(self, ethernet_frame, dst_ip):
         """Delays forwarding a packet to the node connected to the gateway until
         it replies to an ARP request."""
+
+        if type(dst_ip) != str or len(dst_ip) != 4:
+            raise ValueError("dst_ip must be a string of length 4")
+
         if len(self.pending_incoming_packets) < 10:
-            self.pending_incoming_packets.append(ethernet_frame)
+            self.pending_incoming_packets.append((ethernet_frame, dst_ip))
         # otherwise: drop new packets if the psuedo-queue is full
 
-        if not self.is_ok_to_send_arp_request():
+        if not self.is_ok_to_send_arp_request(dst_ip):
             return # we already sent an ARP request recently, so be patient!
-        else:
-            self.last_arp_translation_request = time.time()
 
+        self.update_last_arp_request_time(dst_ip, time.time())
         gw_intf = self.gw_intf_to_first_hop
         dst_mac = '\xFF\xFF\xFF\xFF\xFF\xFF' # broadcast
         src_mac = gw_intf.mac
         eth_type = '\x08\x06'
         eth_hdr = dst_mac + src_mac + eth_type
-        dst_ip = gw_intf.link.get_other(gw_intf).ip
         src_ip = gw_intf.ip
         # hdr: HW=Eth, Proto=IP, HWLen=6, ProtoLen=4, Type=Request
         arp_hdr = '\x00\x01\x08\x00\x06\x04\x00\x01'
         arp_request = eth_hdr + arp_hdr + src_mac + src_ip + dst_mac + dst_ip
         gw_intf.link.send_to_other(gw_intf, arp_request)
 
-    def update_arp_translation(self, addr):
+    def update_last_arp_request_time(self, ip, time):
+        """Updates the time of the last request to an IP in the ARP cache."""
+        try:
+            (mac, last_update, _) = self.arp_cache[ip]
+        except KeyError:
+            mac = None
+            last_update = None
+        self.arp_cache[ip] = (mac, last_update, time)
+
+    def get_next_hop(self, ethernet_frame):
+        """Finds the IP address of the next hop in the topology for an incoming
+        packet.
+        @param ethernet_frame  The ethernet frame which is being forwarded"""
+        
+        # See if the interface the gateway is connected to has an IP
+        gw_intf = self.gw_intf_to_first_hop
+        dst_ip = gw_intf.link.get_other(gw_intf).ip
+        if dst_ip is not None: return dst_ip
+
+        # If that interface doesn't have an IP, see if we can deduce the IP from
+        # the packet
+        if len(ethernet_frame) >= 34:
+            (ethertype,) = struct.unpack_from("!H", ethernet_frame, 12)
+            if ethertype == 0x0800:
+                # It's an IP packet, so we can read off the destination IP
+                dst_ip = ethernet_frame[30:34]
+                return dst_ip
+
+        # Otherwise, we give up
+        raise ValueError("No IP address found")
+
+    def update_arp_translation(self, ip, mac):
         """Updates the ARP translation to the first hop and sends out any
         pending packets."""
-        self.arp_translation = addr
-        self.last_arp_translation = time.time()
+        try:
+            (_, _, last_request) = self.arp_cache[ip]
+        except KeyError:
+            last_request = 0
+
+        self.arp_cache[ip] = (mac, time.time(), last_request)
+
         gw_intf = self.gw_intf_to_first_hop
         if gw_intf:
-            for packet in self.pending_incoming_packets:
-                new_pkt = self.arp_translation + packet[6:]
-                gw_intf.link.send_to_other(gw_intf, new_pkt)
-            self.pending_incoming_packets = [] # clear the list
+            for (packet, pkt_ip) in self.pending_incoming_packets:
+                if pkt_ip == ip:
+                    new_pkt = mac + packet[6:]
+                    gw_intf.link.send_to_other(gw_intf, new_pkt)
+                    self.pending_incoming_packets.remove((packet, pkt_ip))
 
     def get_node_and_intf_with_link(self, node_name, intf_name):
         """Returns a 2-tuple containing the named node and interface if they
@@ -397,14 +463,29 @@ class Topology():
         """Returns true if any clients are connected."""
         return len(self.clients) > 0
 
-    def is_arp_cache_valid(self):
-        """Returns True if the ARP cache entry to the first hop is valid."""
-        return time.time() - self.last_arp_translation <= ARP_CACHE_TIMEOUT
+    def get_arp_cache_entry(self, ip):
+        """Returns the MAC address associated with an IP in the ARP cache, or
+        None if no such MAC is found."""
+        try:
+            (mac, last_updated, last_request) = self.arp_cache[ip]
+        except KeyError:
+            return None
+        if mac is None: return None
+        if last_updated is None: return None
+        if last_updated + ARP_CACHE_TIMEOUT < time.time():
+            del self.arp_cache[ip]
+            return None
+        return mac
 
-    def is_ok_to_send_arp_request(self):
+    def is_ok_to_send_arp_request(self, ip):
         """Returns True if a reasonable amount of time has passed since the
         last ARP request was sent."""
-        return time.time() - self.last_arp_translation_request >= 5 # 5 seconds
+        try:
+            (_, _, last_request) = self.arp_cache[ip]
+        except KeyError:
+            return True
+
+        return time.time() - last_request >= ARP_REQUEST_TIMEOUT
 
     def __make_node(self, dn, raw_socket):
         """Converts the given database node into a simulator node object."""
@@ -780,7 +861,7 @@ class Gateway(Node):
             pkt = ProtocolHelper.Packet(packet)
             if pkt.is_arp_reply() and pkt.dha == self.topo.gw_intf_to_first_hop.mac:
                 logging.debug('%s: handling ARP reply from first hop to gateway' % self.di())
-                self.topo.update_arp_translation(pkt.sha)
+                self.topo.update_arp_translation(pkt.spa, pkt.sha)
                 return
 
         # forward packet out to the real network

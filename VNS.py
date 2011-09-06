@@ -21,16 +21,19 @@ from twisted.internet import reactor
 from twisted.python.log import PythonLoggingObserver
 from twisted.python import log as tlog
 
-from settings import BORDER_DEV_NAME, PCAP_FILTER, MAX_TOPOLOGY_LIFE_SEC, MAX_INACTIVE_TOPOLOGY_LIFE_SEC
+from settings import BORDER_DEV_NAME, PCAP_FILTER, MAX_TOPOLOGY_LIFE_SEC,\
+    MAX_INACTIVE_TOPOLOGY_LIFE_SEC
 import AddressAllocation
 from LoggingHelper import log_exception, addrstr, pktstr
 import ProtocolHelper
 from Topology import TapConfig, Topology, TopologyCreationException
-from TopologyInteractionProtocol import TI_DEFAULT_PORT, create_ti_server, TIOpen, TIPacket, TIBanner, TIPingFromRequest, TITap, TIBadNodeOrPort,\
+from TopologyInteractionProtocol import TI_DEFAULT_PORT, create_ti_server,\
+    TIOpen, TIPacket, TIBanner, TIPingFromRequest, TITap, TIBadNodeOrPort,\
     TIModifyLink
 from TopologyResolver import TopologyResolver
 from VNSProtocol import VNS_DEFAULT_PORT, create_vns_server
-from VNSProtocol import VNSOpen, VNSClose, VNSPacket, VNSOpenTemplate, VNSBanner, VNSRtable, VNSAuthRequest, VNSAuthReply, VNSAuthStatus
+from VNSProtocol import VNSOpen, VNSClose, VNSPacket, VNSOpenTemplate,\
+    VNSBanner, VNSRtable, VNSAuthRequest, VNSAuthReply, VNSAuthStatus
 from web.vnswww import models as db
 import DBService
 

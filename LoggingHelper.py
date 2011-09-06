@@ -17,6 +17,7 @@ def log_exception(lvl, msg):
 
 def addrstr(addr):
     """Returns a pretty-printed address."""
+    if addr is None: return 'None'
     sz = len(addr)
     if sz == 4: # IP
         return inet_ntoa(addr)
