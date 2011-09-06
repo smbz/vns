@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block titlebar %}Clack{% endblock %}
+{% block title %}Clack{% endblock %}
+
+{% block content %}
+
+<p>The <a href="http://yuba.stanford.edu/vns/clack/">Clack Graphical Router</a> is a VNS client which shows how packets travel in a topology and how the parts of the router interact.
+
+<applet code="net.clackrouter.gui.ClackLoader.class" archive="/media/clack/clack-1.7.2.jar" width="500" height="500">
+    <param name="parameters" value="-u http://vns-1.cl.cam.ac.uk/topology{{ tid }}/xml/?token={{ token }}" />
+</applet>
+
+{% endblock %}
