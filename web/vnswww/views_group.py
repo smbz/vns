@@ -258,6 +258,11 @@ def insert_users(user, users, group_name, pos, org, create_and_email_pw=False):
         new_user.groups.add(pos_group)
         if include_group:
             new_user.vns_groups.add(group)
+
+        # Make the user a superuser if necessary
+        if pos == 0:
+            new_user.is_staff = True
+            new_user.is_superuser = True
         
         # Create the user profile
         up = db.UserProfile()

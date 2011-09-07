@@ -137,6 +137,7 @@ def user_create(request):
                 pw = form.cleaned_data['pw']
                 pw_method = form.cleaned_data['pw_method']
                 pos = form.cleaned_data['pos']
+                pos = int(pos)
 
                 # If we've been given an organization, use that org; otherwise
                 # use the org of the user who's creating the new user
@@ -145,6 +146,11 @@ def user_create(request):
                     org = db.Organization.objects.get(name=org_name)
                 except KeyError:
                     org = request.user.get_profile().org
+
+                # Check that we're allowed to create a user with this position/organization
+                if not permissions.allowed_user_access_create(request.user, pos, org):
+                    messages.error(request, "You cannot create this user")
+                    return HttpResponseRedirect('/user/create')
 
                 # Work out what password to set
                 if pw_method == "email":
@@ -160,7 +166,6 @@ def user_create(request):
                     return direct_to_template(request, tn, { 'form': form })
                 user.last_name = last_name
                 user.first_name = first_name
-                pos = int(pos)
                 user.groups.add(Group.objects.get(name=db.UserProfile.GROUPS[pos]))
 
                 # Create the user profile
@@ -170,27 +175,23 @@ def user_create(request):
                 up.org = org
                 up.generate_and_set_new_sim_auth_key()
 
-                # Check that we're allowed to create a user with these attributes
-                if permissions.allowed_user_access_create(request.user, up.pos, up.org):
+                # See if we need to create a superuser
+                if (up.pos == 0):
+                    user.is_staff = True
+                    user.is_superuser = True
 
-                    # We can create the user
-                    user.save()
-                    up.save()
+                # Save everything
+                user.save()
+                up.save()
 
-                    # Email the user their password, if necessary
-                    if pw_method == "email":
-                        user.email_user("VNS Account", "The password for your "
-                                        "new VNS account is %s\n\nPlease log "
-                                        "in and change this ASAP." % pw)
+                # Email the user their password, if necessary
+                if pw_method == "email":
+                    user.email_user("VNS Account", "The password for your "
+                                    "new VNS account is %s\n\nPlease log "
+                                    "in and change this ASAP." % pw)
                     
-                    messages.success(request, "Successfully created new user: %s" % username)
-                    return HttpResponseRedirect('/user/%s/' % username)
-
-                else:
-                    user.delete()
-                    messages.error(request, "You are not allowed to create this "
-                               "kind of user.")
-                    return HttpResponseRedirect('/user/create/')
+                messages.success(request, "Successfully created new user: %s" % username)
+                return HttpResponseRedirect('/user/%s/' % username)
 
             except:
                 # Unknown exception, probably the database isn't set up correctly
