@@ -575,7 +575,7 @@ class IPv4Layer(Layer):
             if self.proto == 0x01:
                 self.sub = ICMPLayer(data[20:])
             elif self.proto == 0x04:
-                self.sub = IPLayer(data[20:])
+                self.sub = IPv4Layer(data[20:])
             elif self.proto == 0x06:
                 self.sub = TCPLayer(data[20:])
             elif self.proto == 0x11:
