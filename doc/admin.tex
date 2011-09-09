@@ -1,0 +1,1130 @@
+\documentclass[a4paper,12pt]{report}
+
+\usepackage{hyperref}
+\usepackage{hhline}
+\usepackage{array}
+\usepackage{multirow}
+
+\begin{document}
+
+\title{VNS Administration Guide}
+\author{A. Ryrie, University of Cambridge Computer Laboratory}
+\date{September 2011}
+
+\maketitle
+
+\tableofcontents
+
+\chapter{Installation and Setup}
+This chapters contains instructions for installing and setting up VNS in the CL; these instructions are not general and will not apply to installations in other places.
+
+\section{Dependencies}
+Before following either of the installation methods below, ensure that you have the correct dependencies.  These are:
+
+\begin{itemize}
+\item Python 2, at least version 2.5 (\texttt{\url{http://www.python.org/}}).  Python 3 may work if you run 2to3 on the VNS source.
+\item Twisted (\texttt{\url{http://twistedmatrix.com/trac/}}).  This is a networking library for python.  It can probably be installed from a distribution's repositories or from EPEL.
+\item Django (\texttt{\url{https://www.djangoproject.com/}}).  This is used for the VNS web interface.  It can probably be installed from a distribution's repositories or from EPEL.
+\item pcapy (\texttt{\url{http://oss.coresecurity.com/projects/pcapy.html}}).  VNS uses this to capture raw packets from the network.  This does not come with CentOS, so it must be downloaded and installed manually as described below.
+\item impacket (\texttt{\url{http://oss.coresecurity.com/projects/impacket.html}}), used to inspect packets.  This does not come with CentOS, so it must be downloaded and installed manually as described below.
+\item pysubnettree (\texttt{\url{http://www.icir.org/robin/pysubnettree/}}), used for looking up which topology an incoming IP packet is forwarded to.
+\item ltprotocol (\texttt{\url{https://github.com/dound/ltprotocol}}), part of the communication protocol for VNS clients.  This does not come with CentOS, so it must be downloaded and installed manually as described below.
+\item pyroven (\texttt{\url{https://wiki.cam.ac.uk/raven/Django}}), used for Raven authentication.  This does not come with CentOS, so it must be downloaded and installed manually as described below.
+\end{itemize}
+
+Many of these dependencies can be found in /usr/groups/netfpga/teaching/vns/dep/ on the CL system.
+
+\subsection{Installing python packages}
+The last five dependencies mentioned above can all be installed by extracting the source code, changing to the relevant directory, and running
+
+\texttt{python setup.py install}
+
+as root.
+
+
+\section{Automatic installation}
+There was originally a script for installing VNS, along with various support files, at \texttt{/usr/groups/netfpga/teaching/vns/setup.sh}.  This can download and install VNS automatically, prompting you for a root user and password as it does so.  If this script is no longer present, follow the manual installation instructions below.
+
+
+\section{Manual installation}
+To install VNS manually, there are several steps:
+
+\begin{enumerate}
+\item Download athe VNS source code from \texttt{\url{https://github.com/smbz/vns}} and put it in /opt/vns.
+\item Create the directories \texttt{/opt/vns/local}, \texttt{/etc/vns} and \texttt{/var/log/vns}.
+\item Put the configuration files in /etc/vns; the configuration files can be found in Appendix A.
+\item Put the init scripts in \texttt{/etc/init.d}.  The scripts can be found in Appendix B.
+\item Compile the SELinux environment for VNS to run in.  The source can be found in Appendix C.
+\item Set the SELinux contexts for various files as follows:
+\begin{itemize}
+\item \texttt{chcon -R system\_u:object\_r:vns\_exec\_t:s0 /opt/vns}
+\item \texttt{chcon -R system\_u:object\_r:vns\_local\_t:s0 /opt/vns/local}
+\item \texttt{chcon -R system\_u:object\_r:vns\_local\_t:s0 /var/log/vns}
+\item \texttt{chcon system\_u:object\_r:vns\_initrc\_exec\_t:s0 /etc/init.d/vns}
+\item \texttt{chcon system\_u:object\_r:vns\_initrc\_exec\_t:s0 /etc/init.d/vns-web}
+\end{itemize}
+\item Create the VNS database by going to \texttt{/opt/vns/web} and running \texttt{python manage.py syncdb}.  This will prompt you for a username and password for the VNS admin.
+\end{enumerate}
+
+\section{Setup}
+VNS can now be set up by going to \texttt{\url{http://vns-1.cl.cam.ac.uk/setup/}}.  You must use the same username and password to login that you supplied during the installation.
+
+The name fields are the display name of your user.  The organization name is the name of your organization.
+
+The server IP address is the IP address of the VNS server, currently 128.232.98.151.
+
+The gateway IP address is the IP address of the gateway the server uses to connect to the internet, currently 128.232.98.2.
+
+The gateway MAC address is the MAC address of the gateway; VNS does not resolve it with ARP.  Currently it is 00:22:91:0A:F8:00.
+
+The IP block is the first IP address of the block of IPs which the server will allocate to topologies.  Currently this is 128.232.48.0.
+
+The ``significant bits in IP block'' forms the CIDR range of IPs to allocate to topologies along with the IP block.  Currently it is 21.
+
+The import default topology templates checkbox determines whether default topology templates (currently ``simple'' and ``pwospf'') will be created.
+
+\section{VNS Logs}
+With VNS configured as above, logs from the VNS simulator are written to \texttt{/var/log/vns/vns.log} and logs from the web server to \texttt{/opt/vns/local/vns-web.log}.  The debugging level of the VNS simulator can be changed by editing \texttt{/opt/vns/logging.conf}; this is a standard python logging configuration file.
+
+
+\chapter{VNS Users}
+
+\section{Types of User}
+VNS has several different types of user with different permissions.
+
+\subsection{VNS Admin}
+VNS Admins can do anything.  They are the only users which can log on to the Django admin interface and change the database directly.
+
+\subsection{Instructor}
+Instructors are administrators for their own organization.  They can do anything in their own organization, including changing passwords for other instructors from their own organization.  For this reason, it is recommended to have only one instructor per organization.
+
+\subsection{TA}
+TAs can view profiles of users in their own organization and create Student and Self-guided student accounts, as well as create topologies with IP blocks allocated to their own organization.  They cannot change user accounts (e.g. reset forgotten passwords) or connect to topologies they have not been explicitly allowed to connect to.
+
+\subsection{Self-guided student}
+Self-guided students can view profiles of users in their own organization and create topologies using IP blocks allocated to their own organization.  They can only connect to topologies they have created or been explicitly allowed to connect to.
+
+\subsection{Students}
+Students can view profiles of users in their own organization and can connect to topologies they have been explicitly allowed to connect to.  This is the most limited type of account.
+
+
+\section{Creating users}
+There are two ways of creating users: individually or in bulk.
+
+\subsection{Bulk user creation}
+This is the method of creating users which is recommended for large groups of users, e.g. classes of students.  This method can create a group and make all users created a member of that group, which simplifies user management.  The method is:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Create Group'' link on the left-hand side near the bottom.
+\item If you want to create a group and make all users you create a member of the group, type a name for the group in the ``Group name'' field.  If you do not want the users to be members of a group, leave this field blank.
+\item Select the type of user from the drop-down menu.  This will apply to all users created.
+\item Select whether to allow only external login (via Raven) or email a password to the newly-createed users.  For non-Cambridge users, this should be set to email a password; this will cause VNS to generate a random password for each user and email it to the email address supplied in the ``Users'' field.
+\item Enter the usernames, emails and names of the new users as comma-separated values in the ``Users'' box, for example
+
+\texttt{fred.smith, fred.smith@example.com, Fred, Smith}
+
+\item If you are permitted to create users which belong to organizations other than your own, you can select the organization to which the new users will belong.  This will apply to all the new users.
+\end{enumerate}
+
+\subsection{Single user creation}
+To create one user at a time:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Create User'' link on the left-hand side.
+\item Enter the details of the user.  The ``Password assignment'' field lets you choose whether the user will be emailed a random password to the email address you enter, will have no password and be required to login externally (e.g. via Raven), or have their password set to a value specified in the form.  The ``Position'' field specifies what the user will be allowed to do on VNS; see ``Types of User'' above.
+\end{enumerate}
+
+\section{Deleting Users}
+If you want to delete several users who have been assigned to a group, follow the instructions for deleting a group.  Otherwise, follow the instructions for deleting a single user.
+
+\subsection{Deleting a group}
+To delete several users which have been assigned a group:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Groups'' link on the left-hand side near the top.
+\item Find the group of users you want to delete and click on the group name.  This shows you a list of members of the group.
+\item Click on the ``Delete all users in this group'' link near the top.
+\end{enumerate}
+
+\subsection{Deleting a single user}
+To delete a single user:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Participants'' link near the top on the left-hand side.
+\item Click on the name of the organization which contains the user you want to delete.  This shows a list of users in that organization.
+\item Find the user you want to delete in the list, and click the ``Delete'' link.
+\end{enumerate}
+
+\section{Undeleting Users}
+When VNS users are `deleted', the data associated with the user is kept.  This makes it possible to undelete users.  However, unless the user is undeleted very soon after the initial deletion, their topologies will not be recovered.
+\begin{enumerate}
+\item Open the VNS admin interface and edit the URL so that it looks like \texttt{http://vns-1.example.com/user/<username>/undelete/}, where \texttt{<username>} is the username of the user to undelete.
+\end{enumerate}
+
+
+\chapter{VNS Topologies}
+Topologies are the virtual networks that a VNS server handles.  They can be manipulated via the web interface.
+
+\section{Creating Topologies}
+There are two ways of creating topologies.  A user can create a ceveral topologies of the same type, and have them assigned to themself; or they can create many topologies and assign them to members of a group (see ``Bulk user creation'' for information about groups).
+
+\subsection{Creating topologies for yourself}
+To create one or more topologies and assign them to yourself:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and click on the ``Create Topology'' link on the left-hand side.
+\item Select the topology template that the topology will be based on.  The topology template determines the nodes in the virtual network, how they are connected, and the readme and routing table for the topology.  See ``VNS Topology Template'' for more information.
+\item Select the block of IP addresses from which IP addresses for the topology will be allocated.  If there are no IP blocks available, then you cannot create a topology; contact the VNS administrator.
+\item Enter the number of topologies of this type to create.  You cannot create more than 30 at once.
+\end{enumerate}
+
+\subsection{Creating topologies for a group}
+To create many topologies and assign a certain number to each member of a group:
+\begin{enumerate}
+\item Open the VNS admin interface ina web browser, log in if necessary, and click on the ``Groups'' link on the left-hand side.
+\item Click on the name of the group you want to create topologies for.
+\item Click on ``Create a topology for each user in this group''.
+\item Select the template that the topologies will be based on.
+\item Select the IP block to allocate IP addresses from.
+\item Enter the number to create for each user.  You cannot create more than 5 for each user.
+\item To restrict the traffic to the topologies to a particular subnet, enter an IP address and subnet mask; for example, to allow only traffic from 12.34.56.0/24 to be forwarded to a topology, enter ``12.34.56.0'' and ``24''.
+\end{enumerate}
+
+This will create one or more topologies for each user in the group and make each user the owner of their topologies.  This means they will haev complete control over the topologies, including being able to add and remove other permitted users and delete the topology.
+
+\section{Restricting traffic to a topology}
+VNS can restrict the traffic that is forwarded to a topology based on the IP source address.  This is done by adding source IP filters for the traffic.  If no source IP filters are specified for a topology, all traffic is allowed.  If several filters are specified, only traffic which matches one or more of the filters is allowed.
+
+\subsection{Adding a source IP filter to a topology}
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and find the topology you want to restrict the traffic for.  You can do this by either clicking on the ``Topologies'' link at the left-hand side, or by finding the topology in the ``Your Profile'' page.
+\item Click the ``Add permitted source IP for traffic'' link.
+\item Enter the subnet and the mask of the subnet to allow.
+\end{enumerate}
+
+\subsection{Removing a source IP filter from a topology}
+\begin{enumerate}
+\item Navigate to the topology information page as for step 1 above.
+\item In the ``Allowed Source IPs (for traffic)'' section, click the ``remove'' link next to the source IP filter you wish to remove.
+\end{enumerate}
+
+\section{Allowing other users access to a topology}
+By default, only the owner of a topology, Instructors in the topology's organization and VNS Admins can connect to a topology.  Any other users whom you wish to be able to access a topology need to be explicitly added to the permitted users list for a topology.
+
+\subsection{Adding a user to a topology's permitted users list}
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and find the topology you want to restrict the traffic for.  You can do this by either clicking on the ``Topologies'' link at the left-hand side, or by finding the topology in the ``Your Profile'' page.
+\item Click the ``Add permitted user'' link in the ``Actions'' section.
+\item Select the username of the user you wish to permit access to.
+\end{enumerate}
+
+\subsection{Removing a user from a topology's permitted users list}
+\begin{enumerate}
+\item Navigate to the topology information page as for step 1 above.
+\item In the ``Allowed Users'' section, click the ``remove'' link next to the user you no longer wish to permit access to.
+\end{enumerate}
+
+
+\chapter{Topology Templates}
+When a topology is created, it is created from a particular topology template.  This template determines which nodes are in a topology and how they are connected, as well as the README and routing table for the topology.
+
+\section{Creating a topology template}
+Topology templates can be created via the VNS web interface as follows:
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Create Template'' link at the left-hand side.
+\item Fill in a name for the template in the ``Name'' field.
+\item Type the description for the topology in the topology description language.  This has two types of statements: node statements, which create nodes, and link statements, which create links between nodes and (implicitly) interfaces on the nodes.
+
+Node statements are of the form
+
+\texttt{<node\_type> <node\_name> \{<type\_specific\_options>\} [ip\_offset]}
+
+\texttt{<node\_type>} is the type of node to create, and can be:
+\begin{description}
+\item[virtual] A node that VNS clients will connect to.  Any packets received by that node will be forwarded to the VNS client and any packets sent by the client will be sent to another node on the network.  This type has no type-specific options.
+\item[gateway] A node which connects the topology to the internet.  This type has no type-specific options.
+\item[webserver] A node which serves web pages.  Takes one type-specific argument: the path of the web pages to serve, relative to \texttt{\$VNS\_PATH/vns\_web\_server\_www/}.
+\item[hub] An ethernet hub, which simply repeats all packets received on all interfaces except the one which received the packet. No type-specific options.
+\item[blackhole] Drops any received packets and sends no packets.  No type-specific options.
+\end{description}
+\texttt{<node\_name>} is the name of the node.  Note that the virtual node is conventionally named \texttt{vrhost}, and the gateway node must be named \texttt{Gateway} for Clack compatibility.  The IP offset is an optional integer argument; if it is -1 then the node will not be assigned any IP addresses, which may be useful when working in the link layer or below.  See also ``Routing'' for details on how VNS routes packets.
+
+Link statements are of the form
+
+\texttt{<node1>.<intf1> = <node2>.<intf2>}
+
+where \texttt{<node1>} and \texttt{<intf1>} are the node and interface names of the interface at one end of the link, and \texttt{<node2>} and \texttt{<intf2>} are the node and interface names for the other end of the link.
+
+\item Fill in a README and routing table for the topology.  These can be any text, but some substitutions are made.  The most useful substitutions are:
+\begin{description}
+\item[\texttt{\$<node>.<intf>.ip}]  The IP address of the given interface.
+\item[\texttt{\$<node>.<intf>.ip15}]  The IP address of the given interface, right-padded to 15 characters with spaces.
+\item[\texttt{\$<node>.<intf>.ip15R}]  The IP address of the given interface, left-padded to 15 characters with spaces.
+\item[\texttt{\$topo.id}]  The topology ID number.
+\item[\texttt{\$topo.gatewayip}]  The IP address of the gateway.
+\item[\texttt{\$topo.gatewayip15}]  The IP address of the gateway, right-padded to 15 characters with spaces.
+\end{description}
+\end{enumerate}
+
+\section{Template visibility}
+Topology templates have a visibility property which affects who can view a template and create topologies from that template.  There are three possibilities:
+\begin{description}
+\item[Public]  Anyone can view and use the template.  This is the default for templates that come with VNS.
+\item[Protected]  Only people in the same organization as the template and VNS admins can view and use the template.  This is the default for user-created templates.
+\item[Private]  Only the template's owner, Instructors in the same organization as the template and VNS admins can view and use the template.
+\end{description}
+There is currently no way to change the template visibility via the web interface; this must be done by a VNS admin via the database interface.
+
+
+\chapter{Organizations}
+Organizations are important within VNS for calculating permissions: most users are able to view user profiles for people within their own organization, and some users can connect to and change topologies of users within their own organization.  Organizations are designed to represent a group of people who work together (e.g. VNS users within a particular university).
+
+\section{Creating an organization}
+\begin{enumerate}
+\item Open the VNS admin interface in a web browser, log in if necessary, and follow the ``Create Organization'' link at the left-hand side near the bottom.
+\item Enter the name of the new organization.
+\end{enumerate}
+
+
+\chapter{The Database}
+It may occasionally be necessary to change something in the VNS configuration which it is not possible to do via the web interface.  VNS provides a web-based interface to the database backend which VNS admin users can access.  To access the database interface, go to \texttt{/admin/} on the VNS web server.  Only VNS admins are able to log in this way.
+
+\section{Database tables}
+\begin{description}
+\item[Docs]  This table contains VNS documentation which is likely to be needed when using the web interface.  It is in HTML format and is accessible at /doc/$<$doc\_name$>$.
+\item[Groups]  Groups of users.
+\item[IP assignments]  When topologies are in use, this contains the IP addresses taken by each of the nodes.
+\item[IP block allocations]  A topology is allocated a block of IPs when it is in use.  This table tracks those blocks.
+\item[IP blocks]  IP blocks from which topologies can be allocated IP addresses.  The usable by child orgs property specifies whether immediate child organizations are able to create topologies with IPs allocated from that block.
+\item[Journal topology deletes]  A queue of topologies which are to be deleted.  When a topology is deleted via the web interface, it is added to this queue; the main VNS simulator then cleans up any connections it has to that topology and deletes it.  This is done once every 30 seconds by default.
+\item[Links]  Used for topology templates, this is a list of pairs of ports which are linked together.
+\item[Mac assignments]  This can be used to assign static MAC addresses to particular interfaces.  It is not normally used.
+\item[Nodes]  Used for topology templates.  This is a list of nodes and their respective topology templates.
+\item[Organizations]  A list of organizations.
+\item[Ports]  Used for topology templates.  This is a list of ports (interfaces) and their nodes.
+\item[Recent ip block allocations]  Tracks which IP blocks have been most recently allocated for a user and topology type.  When IP addresses are allocated, VNS will attempt to use a recently allocated block to provide continuity between allocations.
+\item[Simulators]  A list of simulators and their IP addresses.  Normally contains only one entry.
+\item[System infos]  Information which is passed between the VNS simulator and the web interface.
+\item[Topology source ip filters]  A list of restrictiosn on the source IPs of packets going to a particular topology.
+\item[Topology templates]  The topology templates which are available.
+\item[Topologys]  Available topologies.
+\item[Usage statss]  Information about VNS usage, such as connection time, etc.
+\item[User profiles]  Information about user which is not stored in the main django profile (Auth $>$ Users).  The retired flag sets whether a user can currently log on and do various other things; it is set to True when a user is deleted.
+\item[Web server paths]  A list of paths which virtual web servers will serve.  Used with topology templates.
+\item[Web servers]  A list of virtual web servers.  There is a non-trivial relationship between this and the Nodes table, since the python WebServer class extends the Node class; be very careful when creating new web servers via the DB interface.
+\end{description}
+
+
+\section{Permissions}
+The VNS permissions system allocates various permissions to each type of user.  This uses Django groups and the standard Django permissions system, with each user being a member of one Django group that allows the user various permissions.
+
+\subsection{Changing permissions for a type of user}
+To change what a particular type of user is allowed to do:
+\begin{enumerate}
+\item Open the VNS database interface in a web browser and log in if necessary.
+\item Follow the links to the Auth $>$ Groups table.
+\item Click on the group you wish to change permissions for.
+\item Add and remove permissions from the ``Chosen permissions'' box.  See below for a list of what permissions do.
+\item When you've finished, click ``Save'' at the bottom right.
+\end{enumerate}
+
+\subsection{Adding permissions for a single user}
+To change what permissions a single user has:
+\begin{enumerate}
+\item Open teh VNS database interface in a browser ang lig in if necessary.
+\item Follow the links to the Auth $>$ Users table.
+\item Click on teh user you wish to change permissions for.
+\item Add/remove permissions in the permissions section.
+\item When you have finished, click ``Save'' in the bottom right.
+\end{enumerate}
+
+\subsection{Available permissions}
+Only permissions which have an effect are listed here.  There are some permissions which are present by default but which have no effect.
+
+Most actions have two associated permissions: one for allowing when the subject of the operation is the same organization as the user performing the operation, and one for allowing for any subject.  In this case, the action is allowed to proceed if either the user has the permission which allows the operation on any subject or both the user has the permission which allows the operation on a subject from the same organization as the user and the user's organization and the subject's organization are the same.  The operation may also be allowed to proceed if there is some special case for the particular user and object combination, e.g. if a user owns a topology they are allowed to use and modify that topology.
+
+\begin{description}
+\item[auth | user | Can add user]  If set, a user can (in principle) create other users.  There must also be at least one type of user they can create; see for example ``user profile | Add TA users''.
+\item[group | Can add group] Whather the user can create groups of users.
+\item[group | Create new groups in any organization]  Whether the user can create groups of users which belong to organizations other than their own.
+\item[group | Create new groups in own organization]  Whether the user can create groups of users which belong to their own organization.
+\item[group | Change membership any group]  Whether the user can change the membership of any group.
+\item[group | Delete any group, but not necessarily its users]  If set, a user can any group.  This does not mean that they can delete the users in the group; this is controlled separately by the ``user profile | Delete...'' permissions.
+\item[group | Delete any group from own organization, but not necessarily its users]  If set, a user can delete groups from their own organization, subject to the same caveats as above.
+\item[group | View members of any group]  If set, a user can view the membership of any group.  This is not the same thing as being able to view the user profiles for the users within that group.
+\item[group | View members of any group from own organization]  If set, a user can view the membership of any group from the same organization as them.  This does not grant permission to view the pri=ofiles of users within that group.
+\item[ip block | Allocate addresses from any IP block]  If set, a user can use any IP block when creating topologies.  This does not grant permission to create topologies.
+\item[ip block | Allocate addresses from any IP block from your organization]  If set, a user can use any IP block which belongs to their own organization when creating topologies or any IP block which belongs to a direct parent organization and has the ``Usable by child orgs'' property set.  It does not grant permissions to use IP blocks from an indirect parent (`grandparent' organizations or higher).
+\item[organization | Can add organization]  If set, a user can create new organizations.
+\item[organization | Change attributes of own organization]  If set, a user can change information associated with their own organization.
+\item[organization | Change attributes of any organization]  If set, a user can change information associated with any organization.
+\item[topology | Can add topology]  If set, a user can create topologies.  Note that a user must also have permissions to use at least on topology template and use at least on IP block to be able to create a topology.
+\item[topology | Change any topology]  If set, a user can add/remove permitted users, source IP filters, etc. to and from any topology.
+\item[topology | Change any topology from own organization]  If set, a user can add/remove permitted users, source IP filters, etc. to and from any topology which is owned by someone in their organization.
+\item[topology | Delete any topology]  If set, a user can delete any topology.
+\item[topology | Delete any topology from own organization]  If set, and user can delete any topology which is owned by someone in their own organization.
+\item[topology | View and connect to any topology]  If set, a user can connect to any topology with a VNS client, and can view the properties of any topology via the web interface.
+\item[topology | View and connect to any topology from own organization]  If set, a user can connect to any topology owned by someone from their own organization, and can view the properties of any such topology via the web interface.
+\item[topology template | Can add topology template]  If set, a user can create topology templates.
+\item[topology template | Change any topology template]  If set, a user can modify any existing topology template.
+\item[topology template | Change any topology template from the same organization]  If set, a user can modify any topology template from their own organization.
+\item[topology template | Delete any topology template]  If set, a user can delete any topology template.
+\item[topology template | Delete any topology template from the same organization]  If set, a user can delete any topology template from their own organization.
+\item[topology template | View and use any topology template]  If set, a user can view any topology template in the web interface and can use it to create topologies.
+\item[topology template | View and use any topology template from the same organization]  If set, a user can view any topology topology template from their own organization in the web interface and use any such template to create topologies.
+\item[user profile | Add VNS admin users]  If set, a user can create VNS Admins.  The ``auth | user | Can add user'' permission must also be set for a user to be allowed to create other users.
+\item[user profile | Add instructor users]  If set, a user can create Instructor users.  The ``auth | user | Can add user'' permission must also be set for a user to be allowed to create other users.
+\item[user profile | Add self-guided student users]  If set, a user can create Self-guided student users.  The ``auth | user | Can add user'' permission must also be set for a user to be allowed to create other users.
+\item[user profile | Add student users]  If set, a user can create student users.  The ``auth | user | Can add user'' permission must also be set for a user to be allowed to create other users.
+\item[user profile | Add TA users]  If set, a user can create TA users.  The ``auth | user | Can add user'' permission must also be set for a user to be allowed to create other users.
+\item[user profile | Change password, profile, etc. of any user]  If set, a user can change the password and authentication key of any user.
+\item[user profile | Change password, profile, etc. of any user from same organization]  If set, a user can change the password and autentication key of any user from their own organization.
+\item[user profile | Create users at organizations other than own]  If set, a user can create users at organizations which are not their own organization.
+\item[user profile | Delete or mark as retired any user]  If set, a user can mark as retired / delete any user.
+\item[user profile | Delete or mark as retired any user from same organization]  If set, a user can delete / mark as retired any user who comes from the same organization as them.
+\item[user profile | Delete or mark as retired yourself]  If set, a user can delete / mark as retired themself.
+\item[user profile | View the profile of any user]  If set, a user can view the profile (including name and email address) of any user.
+\item[user profile | View the profile of any user from same organization]  If set, a user can view the profile (including name and email address) of any user from the same organization as them.
+\end{description}
+
+
+\chapter{Packets and Routing}
+This chapter describes how VNS routes packets in a topology.  All packets received and transmitted include ethernet headers (source and destination MAC addresses and the ethertype).
+
+\section{External packets}
+Most VNS topologies are connected to the internet via a gateway node (see ``Topology templates''), which passes on packets destined for that topology.
+
+When the VNS server receives an IPv4 packet, it checks to see if the destination IP address belongs to any currently running topology, and checks that the source IP address is permitted to send packets to that topology.  If the packet doesn't match both these conditions, it is dropped.  If it does match both, it is passed without modification to the relevant topology's gateway node with instructions that the destination MAC address should be rewritten.
+
+When the VNS server receives a non-IPv4 packet, it checks if the destination MAC address if related to any topology, and if so then passes the packet without modification to that topology's gateway node.
+
+When the gateway node gets the packet, it sees if the destination MAC address should be rewritten.  This is only done on IPv4 packets, where the destination MAC address of the incoming packet is the MAC of the VNS server's physical ethernet interface.  If the packet is not an IPv4 packet, no changes are made to the packet.
+
+\subsection{MAC rewriting}
+If the MAC address does need to be rewritten, the gateway node attempts to find the IP address of the interface which should receive the packet.  This is done by two methods:
+\begin{enumerate}
+\item If the gateway node is connected to an interface which has an IP address, then the IP address to forward to is set to the IP address of that interface.
+\item If 1. does not work, then the IP address to forward to is set to the destination IPv4 address in the packet.
+\item If neither of the above work, the packet is dropped and a log entry (at debug level) is made.
+\end{enumerate}
+
+When an IP address has been found, the gateway node checks its ARP cache for an entry for that IP.  If an entry exists, then the destination MAC address is modified set to the MAC which was found in the cache.  If no entry exists, then the packet is queued and an ARP request is sent to the topology asing about that IP.  The queue can hold 10 packets; when the queue is full, packets which would normally be added to the queue are silently dropped.
+
+\subsection{Forwarding}
+When the MAC address has been rewritten (or immediately, if no rewriting was required), the packet is sent from the gateway node's interface.
+
+\section{Internal packets}
+Internal packets are handled entirely within VNS; when a node wishes to send a packet to another node, it (indirectly) calls the \texttt{handle\_packet()} method on the other node.  There are no modifications which are made to the packet in transit.
+
+\section{Link-layer topologies}
+The routing mechanism specified above makes it possible to create topologies which deal with packets at the ethernet level, rather than the IP level.  If a topology is created which does not assign IP addresses to the node immediately adjacent to the gateway, VNS will forward packets to the destination IP address instead of the IP address of the node adjacent to the gateway.  For details of how to create a topology template which does not assign IP addresses to a particular node, see ``Creating a topology template''.
+
+Note that the \texttt{sr\_stub} code will not allow a node to send or receive packets which do not match the interface's MAC address; use the \texttt{ss\_stub} code instead, which removes this restriction and also desn't load the routing table.
+
+
+\chapter{Clients and the VNS Protocol}
+VNS clients can connect to a topology and send/receive packets from a `virtual' node.  Clients connect to the VNS server on TCP port 3250, and exchange messages of the format
+
+\section{Bit format}
+\subsection{Header}
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{4}*{Byte number} & 0 & \multicolumn{4}{c|}{Length} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{Type} \\
+\hhline{~~----}
+ & 8 & \multicolumn{4}{c|}{\multirow{2}{*}{Payload}} \\
+ & 12 & \multicolumn{4}{c|}{} \\
+\end{tabular}
+\end{center}
+
+The fields are:
+\begin{description}
+\item[Length]  A 32-bit unsigned integer in network byte order giving the total length of the message, in octets, including the length and type fields in the header.
+\item[Type]  A 32-bit unsigned integer in network byte order giveng the type number of the message.  Type numbers are specified below.
+\item[Payload]  The content of the message, which depends on the message type.
+\end{description}
+
+\subsection{Message types}
+The bit layout diagrams shown below specify the packet payload to be inserted after the length and type fields shown above.
+
+\subsubsection{VNSOpen}
+\begin{itemize}
+\item Message number: 1
+\end{itemize}
+Requests that the server open a topology and connect the client to a virtual node on that topology.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{4}*{Byte number} & 0 & \multicolumn{2}{c|}{Topology ID} & \multicolumn{2}{c|}{Reserved} \\
+\hhline{~~----}
+ & 4-32 & \multicolumn{4}{c}{Host name} \\
+\hhline{~~----}
+ & 36-64 & \multicolumn{4}{c}{Username} \\
+\hhline{~~----}
+ & 68-96 & \multicolumn{4}{c}{Password} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Topology ID]  16-bit unsigned integer specifying the ID number of the topology to which the client wishes to connect.
+\item[Reserved]  For this version of the specification, all bits should be set to 0.
+\item[Host name]  ASCII string, null-padded if the string is less than 32 octets long.  The name of the node on the topology which the client wishes to connect to.
+\item[Username]  The name of the user who is connecting, with the same format.
+\item[Password]  The password of the user who is connecting, with the same format.
+\end{description}
+
+\subsubsection{VNSClose}
+\begin{itemize}
+\item Message type: 2
+\end{itemize}
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{1}*{Byte number} & 0-252 & \multicolumn{4}{c|}{Message} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Message] ASCII string, null-padded if the string is less than 256 octets long, specifying the reason the connection is about to be closed.
+\end{description}
+
+\subsubsection{VNSPacket}
+\begin{itemize}
+\item Message type: 4
+\end{itemize}
+Sends a packet which was received on a virtual node's interface to a client, or requests that the server send a packet from an interface on a virtual node.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{2}*{Byte number} & 0-12 & \multicolumn{4}{c|}{Interface name} \\
+\hhline{~~----}
+ & 16- & \multicolumn{4}{c|}{Packet} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Interface name]  ASCII string, null-padded if the string is less than 16.  If the packet is from the server to the client, this specifies the name of the interface on which the packet was received.  If the packet is from the client to the server, this specifies the name of the interface on which the packet should be sent.
+\item[Packet]  The packet which was received or which should be sent.  This occupies from bit 16 of te message to the end of the message.
+\end{description}
+
+\subsubsection{VNSBanner}
+\begin{itemize}
+\item Message type: 2
+\end{itemize}
+Requests that the client print a message to the user.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{1}*{Byte number} & 0-252 & \multicolumn{4}{c|}{Message} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Message] ASCII string, null-padded if the string is less than 256 octets long, giving the message to be printed.
+\end{description}
+
+\subsubsection{VNSHardwareInfo}
+\begin{itemize}
+\item Message type: 2
+\end{itemize}
+This message tells the client about the virtual interfaces that it has.  It is a concatenation of several groups, each of which is a concatenation of multiple chunks.  Each group gives information about a single interface.  Each chunk gives a particular piece of information about that interface.
+
+Every group begins with a chunk which specifies the name of the interface, and every such chunk signals the start of a new group.  All subsequent chunks which do not specify an interface name give properties of the last named interface.  The first chunk must specify an interface name.
+
+Chunks consist of 36 octets, of which the first 4 are a 32-bit unsigned integer identifying the type of chunk, and the remaining 32 are type-dependent data.
+
+The format of the chunks are as follows.
+
+\paragraph{Interface name chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{2}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4-32 & \multicolumn{4}{c|}{Interface name} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 1.
+\item[Interface name]  ASCII string giving the name of the interface, null-padded if the string is less than 32 octets long.
+\end{description}
+
+\paragraph{Hardware speed chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{Speed} \\
+\hhline{~~----}
+ & 8-32 & \multicolumn{4}{c|}{Reserved} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 2.
+\item[Speed]  32-bit unsigned integer giving the speed of the interface.
+\end{description}
+
+\paragraph{MAC address chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{4}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{MAC address} \\
+\hhline{~~----}
+ & 8 & \multicolumn{2}{c|}{MAC address (cont.)} & \multicolumn{2}{c|}{Reserved} \\
+\hhline{~~----}
+ & 12-32 & \multicolumn{4}{c|}{Reserved (cont.)} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 32.
+\item[MAC Address]  6 octets specifying the MAC address of the interface.
+\end{description}
+
+\paragraph{IP address chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{IP address} \\
+\hhline{~~----}
+ & 8-32 & \multicolumn{4}{c|}{Reserved} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 64.
+\item[IP Address]  4 octets specifying the IP address of the interface.
+\end{description}
+
+\paragraph{Subnet chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{Subnet address} \\
+\hhline{~~----}
+ & 8-32 & \multicolumn{4}{c|}{Reserved} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 4.
+\item[Subnet address]  4 octets specifying the subnet IP address of the interface.
+\end{description}
+
+\paragraph{Subnet mask chunk}
+\begin{center}
+\begin{tabular}{r r | m{1in} | m{1in} | m{1in} | m{1in} |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & \multicolumn{4}{c|}{Chunk ID} \\
+\hhline{~~----}
+ & 4 & \multicolumn{4}{c|}{Subnet mask} \\
+\hhline{~~----}
+ & 8-32 & \multicolumn{4}{c|}{Reserved} \\
+\hhline{~~----}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Chunk ID]  32-bit unsigned integer with value 128.
+\item[IP Address]  4 octets specifying the subnet mask for the interface.
+\end{description}
+
+
+\subsubsection{VNSAuthRequest}
+\begin{itemize}
+\item Message type: 128
+\end{itemize}
+Requests that the client authenticate itself.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{1}*{Byte number} & 0- & \multicolumn{4}{c|}{Salt} \\
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Salt]  A salt to be used when hashing the authentication key.
+\end{description}
+
+
+\subsubsection{VNSAuthReply}
+\begin{itemize}
+\item Message type: 256
+\end{itemize}
+A reply to a VNSAuthRequest message giving credentials.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & \multicolumn{4}{c|}{Username length} \\
+\hhline{~~----}
+ & & \multicolumn{4}{c|}{Username} \\
+\hhline{~~----}
+ & & \multicolumn{4}{c|}{Hash} \\
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Username length]  32-bit unsigned integer giving the length of the username, in octets.
+\item[Username]  ASCII string with length given by ``Username length'' specifying the user to authenticate as.
+\item[Hash]  20 bytes giving the SHA-1 hash of the concatenation of the salt supplied in the VNSAuthRequest and the user's authentication key.
+\end{description}
+
+
+\subsubsection{VNSAuthStatus}
+\begin{itemize}
+\item Message type: 512
+\end{itemize}
+A message from the server to the client telling the client whether or not it is successfully authenticated.
+\begin{center}
+\begin{tabular}{r r | c | c | c | c |}
+ & & \multicolumn{4}{c}{Byte offset} \\
+ & & +0 & +1 & +2 & +3 \\
+\hhline{~-----}
+\multirow{3}*{Byte number} & 0 & Auth OK & \multicolumn{3}{c|}{Message} \\
+\hhline{~~----}
+ & 4- & \multicolumn{4}{c|}{Message (cont.)}
+\end{tabular}
+\end{center}
+\begin{description}
+\item[Auth OK]  A single octet with value 1 if authentication was successful, 0 if it was not.
+\item[Message]  Optional.  ASCII string giving more details.
+\end{description}
+
+\section{Connecting to a topology}
+\subsection{Authentication}
+To establish a connection to a topology, a client connects to TCP port 3250 on the VNS server.  If the TCP connection does not succeed, then it is not possible to connect to a topology, and the client should display a message to that effect to the user.
+
+When a TCP connection to a server has been established, a server must send a VNSAuthRequest message to the client.  The salt in the VNSAuthRequest message should be a random number generated in a secure manner.  The client must not send any message to the server before the server has sent a VNSAuthRequest message.
+
+On receipt of the VNSAuthRequest message, the client must send a VNSAuthReply message with the username of the user who is authenticating and the SHA-1 hash of the salt from the VNSAuthRequest and the user's authentication key, in that order.  Clients should ensure that a username and authentication key are known before attempting to make the TCP connection.  Clients must not send any message to the server other than a VNSAuthReply before refceiving a VNSAuthStatus message.
+
+When the server receives a VNSAuthReply message it verifies that a user by the supplied username exists and that the hash of the salt and authentication key is correct.  If either of these conditions are not met the server must terminate the TCP connection without processing any further packets from the client.  The server may send a VNSAuthStatus message to the client saying that authentication has failed, optionally giving a reason for the failure, before closing the connection.  If authentication succeeds then the server must send a VNSAuthStatus message with the ``Auth OK'' field set, and optionally giving a message.
+
+On receipt of a VNSAuthStatus message, clients must close the connection if the authentication has not succeeded, and should display the accompanying message to the user if one is present.  If the authentication has succeeded, the client should attempt to connecto to a topology using a VNSOpen message.
+
+\subsection{Opening a topology}
+Once authentication has succeeded, a VNS client should attempt to connect to a topology on the VNS server by sending a VNSOpen message.  The username field must match the username supplied during the authentication process, and the password field should be blank.  On receiving the VNSOpen message, the server should attempt to open the topology specified and connect the client to the relevant node.  If this is not possible, the server should send a VNSBanner message to the client specifying what went wrong, and close the connection.  If the client was successfully connected to the topology, the server should send a VNSHardwareInfo message to the client with information about all available interfaces on the node to which the client is connected.
+
+When the client receives the VNSHardwareInfo message, the connection to the topology is complete and normal packets can begin to be exchanged.
+
+\subsection{Error conditions}
+Any unexpected messages received during the authentication phase must be treated as an attempt to compromise the system, and the server or client receiving the unexpected message must close the connection.  This also applies to invalid messages or messages of an unknown type.
+
+Once a client has successfully authenticated, any unexpected or invalid messages may be ignored or may cause termination of the connection, optionally with VNSBanner messages specifying what went wrong.
+
+It is an error for the client to send any authentication messages once it has authenticated, unless the server sends a further VNSAuthRequest message, in which case the client must respond with a VNSAuthReply and must wait for a VNSAuthStatus before sending any further messages.  If the client does send any such messages, the server must close the connection, and may send a message explaining the problem before closing the connection.
+
+\section{Running a topology}
+Once the connection to the topology has been successfully completed, the server should start forwarding all packets received on any of the interfaces on the node to which the client is connected to the client with VNSPacket messages.  The server should also send any packets which the client sends it using VNSPacket messages from the interface specified in the message.
+
+If the server receives a VNSPacket message from the client with an invalid interface, it should send the client a VNSBanner message saying what went wrong, and drop the packet.  If the client receives a VNSPacket message from the server with an invalid interface, it should drop the packet and close the connection.
+
+If the client receives a VNSBanner message from the server, it should display the message to the user.  If the server receives a VNSBanner message from the client, it may log the message.
+
+Any message other than VNSPacket and VNSBanner messages received by the server during this stage must be ignored.  The server may send an explanatory VNSBanner message to the client on receipt of the message, and may close the connection.
+
+Any message other than VNSPacket, VNSAuthRequest and VNSBanner messages received by the client during this stage must be ignored.  The client may send an explanatory VNSBanner message to the server on receipt of the message, and may close the connection.
+
+\subsection{Reauthentication}
+If the client receives a VNSAuthRequest message from the server it must send a VNSAuthReply with the SHA-1 hash of the concatenation of the salt supplied in the VNSAuthRequest with the user's authentication key.  If the authentication succeeds, the server must send a VNSAuthStatus message telling the client that authentication has succeeded.  If the the authentication fails, the server must terminate the connection and may send a VNSAuthStatus message before termination saying what went wrong.
+
+The client must not send any messages other than a VNSAuthReply between receiving a VNSAuthRequest and the corresponding VNSAuthStatus.  However, the server must not rely on not receiving any messages from the client between sending VNSAuthRequest and VNSAuthStatus messages, as network delay may be considerable.  Any such packets that the server receives should be either queued until the client has successfully re-authenticated, then processed, or processed immediately.
+
+\section{Closing connections}
+Connections may be closed by either the client or the server at any time by closing the TCP connection.
+
+\appendix
+\chapter{Configuration Files}
+These configuration files go in \texttt{/etc/vns/}.
+
+\section{django.ini}
+Don't forget to put in a suitable name and email on lines 2 and 3, and replace ``\texttt{ at }'' with an actual @ sign on line 7.  The admin email is used for (hopefully) infrequent error messages from the server.
+
+\begin{verbatim}
+[admin]
+name=Fred Smith
+email=fred.smith@example.com
+
+[email]
+host=mail.cl.cam.ac.uk
+address=www-vns at cl.cam.ac.uk
+
+[db]
+path=/opt/vns/local/vns.db
+\end{verbatim}
+
+\section{raven.ini}
+\begin{verbatim}
+[raven]
+login_url = "http://raven.cam.ac.uk/auth/authenticate.html"
+logout_url = "http://raven.cam.ac.uk/auth/logout.html"
+return_url = "http://vns-1.cl.cam.ac.uk/ravenreturn/"
+pubkeys = {'2':'/etc/vns/pubkey2.crt'}
+\end{verbatim}
+
+\section{pubkey2.crt}
+This is the Raven public key, available from \texttt{\url{https://raven.cam.ac.uk/project/keys/}}.
+\begin{verbatim}
+-----BEGIN CERTIFICATE-----
+MIIDrTCCAxagAwIBAgIBADANBgkqhkiG9w0BAQQFADCBnDELMAkGA1UEBhMCR0Ix
+EDAOBgNVBAgTB0VuZ2xhbmQxEjAQBgNVBAcTCUNhbWJyaWRnZTEgMB4GA1UEChMX
+VW5pdmVyc2l0eSBvZiBDYW1icmlkZ2UxKDAmBgNVBAsTH0NvbXB1dGluZyBTZXJ2
+aWNlIFJhdmVuIFNlcnZpY2UxGzAZBgNVBAMTElJhdmVuIHB1YmxpYyBrZXkgMjAe
+Fw0wNDA4MTAxMzM1MjNaFw0wNDA5MDkxMzM1MjNaMIGcMQswCQYDVQQGEwJHQjEQ
+MA4GA1UECBMHRW5nbGFuZDESMBAGA1UEBxMJQ2FtYnJpZGdlMSAwHgYDVQQKExdV
+bml2ZXJzaXR5IG9mIENhbWJyaWRnZTEoMCYGA1UECxMfQ29tcHV0aW5nIFNlcnZp
+Y2UgUmF2ZW4gU2VydmljZTEbMBkGA1UEAxMSUmF2ZW4gcHVibGljIGtleSAyMIGf
+MA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQC/9qcAW1XCSk0RfAfiulvTouMZKD4j
+m99rXtMIcO2bn+3ExQpObbwWugiO8DNEffS7bzSxZqGp7U6bPdi4xfX76wgWGQ6q
+Wi55OXJV0oSiqrd3aOEspKmJKuupKXONo2efAt6JkdHVH0O6O8k5LVap6w4y1W/T
+/ry4QH7khRxWtQIDAQABo4H8MIH5MB0GA1UdDgQWBBRfhSRqVtJoL0IfzrSh8dv/
+CNl16TCByQYDVR0jBIHBMIG+gBRfhSRqVtJoL0IfzrSh8dv/CNl16aGBoqSBnzCB
+nDELMAkGA1UEBhMCR0IxEDAOBgNVBAgTB0VuZ2xhbmQxEjAQBgNVBAcTCUNhbWJy
+aWRnZTEgMB4GA1UEChMXVW5pdmVyc2l0eSBvZiBDYW1icmlkZ2UxKDAmBgNVBAsT
+H0NvbXB1dGluZyBTZXJ2aWNlIFJhdmVuIFNlcnZpY2UxGzAZBgNVBAMTElJhdmVu
+IHB1YmxpYyBrZXkgMoIBADAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBBAUAA4GB
+AFciErbr6zl5i7ClrpXKA2O2lDzvHTFM8A3rumiOeauckbngNqIBiCRemYapZzGc
+W7fgOEEsI4FoLOjQbJgIrgdYR2NIJh6pKKEf+9Ts2q/fuWv2xOLw7w29PIICeFIF
+hAM+a6/30F5fdkWpE1smPyrfASyXRfWE4Ccn1RVgYX9u
+-----END CERTIFICATE-----
+\end{verbatim}
+
+
+\chapter{init Scripts}
+These scripts go in \texttt{/etc/init.d/}.  They're not the best init scripts ever because VNS doesn't daemonise itself, but they work after a fashion.
+
+\section{vns}
+\tiny
+\begin{verbatim}
+#!/bin/sh                                                                                              
+#                                                                                                      
+# vns      Start/stop the VNS daemon                                                                   
+#                                                                                                      
+# chkconfig: 345 90 10                                                                                 
+# description: Stanford VNS is a network simulator that allows users \                                 
+#              to write user-space programs which run on their own \                                   
+#              machine but deal with low-level network protocols.                                      
+#                                                                                                      
+
+PYTHON=/usr/bin/python
+VNS=/opt/vns/VNS.py
+PIDFILE=/opt/vns/local/pid
+
+[ -f $VNS ] || {
+    [ "$1" = "status" ] && exit 4 || exit 6
+}
+[ -f $PYTHON ] || {
+    [ "$1" = "status" ] && exit 4 || exit 6
+}
+
+# Source function library.                                                                             
+. /etc/rc.d/init.d/functions
+
+start() {
+    if [ $UID -ne 0 ] ; then
+        echo "User has insufficient privilege."
+        exit 4
+    fi
+    [ -x $PYTHON ] || exit 5
+    echo -n $"Starting vns: "
+    $PYTHON -O $VNS &> /dev/null &
+    echo $! > $PIDFILE
+    retval=0
+    echo
+    return $retval
+}
+
+stop() {
+    if [ $UID -ne 0 ] ; then
+        echo "User has insufficient privilege."
+        exit 4
+    fi
+    if [ ! -f $PIDFILE ] ; then
+        echo "VNS does not appear to be running."
+        exit 6
+    fi
+    echo -n $"Stopping vns: "
+    kill `cat $PIDFILE`
+    sleep 1
+    rm $PIDFILE
+    echo
+}
+
+restart() {
+    stop
+    start
+}
+
+unlock() {
+    rm -f $PIDFILE
+}
+
+case "$1" in
+    start)
+        $1
+        ;;
+    stop)
+        $1
+        ;;
+    restart)
+        $1
+        ;;
+    unlock)
+        $1
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart}"
+        exit 2
+esac
+exit $?
+
+\end{verbatim}
+\normalsize
+
+\section{vns-web}
+\tiny
+\begin{verbatim}
+#!/bin/sh                                                                                                                                                                                     
+#                                                                                                                                                                                             
+# vns-web  Start/stop the VNS web management server daemon                                                                                                                                    
+#                                                                                                                                                                                             
+# chkconfig: 345 90 10                                                                                                                                                                        
+# description: Stanford VNS is a network simulator that allows users \                                                                                                                        
+#              to write user-space programs which run on their own \                                                                                                                          
+#              machine but deal with low-level network protocols.                                                                                                                             
+#                                                                                                                                                                                             
+
+TWISTD=`which twistd`
+WEBSERVER=/opt/vns/run_vns_web_server.py
+PIDFILE=/opt/vns/local/web.pid
+
+[ -f $WEBSERVER ] || {
+    [ "$1" = "status" ] && exit 4 || exit 6
+}
+[ -f $TWISTD ] || {
+    [ "$1" = "status" ] && exit 4 || exit 6
+}
+
+# Source function library.                                                                                                                                                                    
+. /etc/rc.d/init.d/functions
+
+start() {
+    if [ $UID -ne 0 ] ; then
+        echo "User has insufficient privilege."
+        exit 4
+    fi
+    [ -x $PYTHON ] || exit 5
+    echo -n $"Starting vns: "
+    $TWISTD -ny $WEBSERVER --pidfile /opt/vns/local/twistd.pid &> /opt/vns/local/vns-web.log &
+    echo $! > $PIDFILE
+    retval=0
+    echo
+    return $retval
+}
+
+stop() {
+    if [ $UID -ne 0 ] ; then
+        echo "User has insufficient privilege."
+        exit 4
+    fi
+    if [ ! -f $PIDFILE ] ; then
+        echo "VNS does not appear to be running."
+        exit 6
+    fi
+    echo -n $"Stopping vns: "
+    kill `cat $PIDFILE`
+    sleep 1
+    PROC=`ps --no-headers -p $(cat $PIDFILE)`
+    rm $PIDFILE
+    echo
+}
+
+restart() {
+    stop
+    start
+}
+
+unlock() {
+    rm -f $PIDFILE
+}
+
+case "$1" in
+    start)
+        $1
+        ;;
+    stop)
+        $1
+        ;;
+    restart)
+        $1
+        ;;
+    unlock)
+        $1
+        ;;
+    *)
+        echo $"Usage: $0 {start|stop|restart}"
+        exit 2
+esac
+exit $?
+\end{verbatim}
+\normalsize
+
+
+\chapter{SELinux environment}
+The VNS machine in the CL uses SELinux to prevent an attacker gaining complete control over the machine if the VNS service is compromised.  This requires an SELinux type enforcement policy package, which on CentOS 6 can be compiled from \texttt{vns.te} below.  It also requires \texttt{vns.fc} and \texttt{vns.if}, both of which are empty.  The policy package can be compiled with
+
+\texttt{make -f /usr/share/selinux/devel/Makefile}
+
+and installed with
+
+\texttt{semodule -i vns.pp}.
+
+\section{vns.te}
+\tiny
+\begin{verbatim}
+policy_module(vns, 0.0.39)
+
+### DECLARATIONS ###
+
+require {
+        attribute domain;
+        attribute file_type;
+        attribute exec_type;
+        type unconfined_t;
+        type http_port_t;
+        type bin_t;
+        role unconfined_r;
+        type user_devpts_t;
+        type etc_t;
+        type nscd_var_run_t;
+        type proc_t;
+        type lib_t;
+        type consoletype_exec_t;
+        type locale_t;
+        type urandom_device_t;
+        type tmp_t;
+        type tmpfs_t;
+        type httpd_config_t;
+        type node_t;
+        type var_log_t;
+        type port_t;
+        type proc_net_t;
+        type net_conf_t;
+        type smtp_port_t;
+        type initrc_t;
+};
+
+type vns_t, domain;
+type vns_exec_t, file_type, exec_type;
+type vns_initrc_exec_t, file_type, exec_type;
+type vns_local_t, file_type;
+
+# Allow the system_u:system_r:vns_t domain
+role system_r types vns_t;
+
+# Allow SIGCHLD for startup scripts
+allow vns_t initrc_t:process { sigchld };
+
+# Allow use of shared libraries
+allow vns_t lib_t:file { open read getattr execute };
+
+# Allow use of own executables
+allow vns_t vns_exec_t:file { getattr open read execute getattr };
+allow vns_t vns_exec_t:dir { getattr search open add_name remove_name };
+
+# Make it such that, when we run the init script as root, we go to the vns_t domain
+domain_auto_trans(unconfined_t, vns_initrc_exec_t, vns_t)
+
+# Allow access to TCP, UDP and raw sockets, as well as the HTTP socket for the web server
+allow vns_t vns_t:tcp_socket { connect create read shutdown write setopt bind node_bind name_bind getattr listen accept };
+allow vns_t vns_t:udp_socket { connect create read shutdown write setopt bind ioctl };
+allow vns_t vns_t:rawip_socket { connect create read shutdown write bind };
+allow vns_t vns_t:packet_socket { connect create read shutdown write bind };
+allow vns_t http_port_t:tcp_socket { listen accept recv_msg send_msg bind name_bind };
+allow vns_t port_t:tcp_socket { listen accept recv_msg send_msg bind name_bind };
+allow vns_t vns_t:netlink_route_socket { create bind getattr write nlmsg_read read };
+allow vns_t node_t:tcp_socket { node_bind };
+allow vns_t vns_t:capability { net_bind_service net_raw };
+allow vns_t vns_t:packet_socket { ioctl getopt setopt };
+allow vns_t proc_net_t:file { read };
+
+# Allow access to the local config files
+allow vns_t vns_local_t:file { getattr read write create open append unlink lock };
+allow vns_t vns_local_t:dir { getattr read write create open add_name remove_name search };
+
+# Allow us to write stuff to the terminal
+allow vns_t user_devpts_t:chr_file { getattr read write append ioctl };
+
+# Allow us access to our own fifos
+allow vns_t vns_t:fifo_file { getattr read write append };
+
+# Allow us to access urandom
+allow vns_t urandom_device_t:chr_file { read open };
+
+# Allow us to execute the init script once we've transitioned to vns_t
+allow vns_t vns_initrc_exec_t:file { open read getattr ioctl execute entrypoint };
+allow vns_t bin_t:dir { open read getattr search };
+allow vns_t bin_t:file { open read getattr execute execute_no_trans };
+allow vns_t bin_t:lnk_file { read getattr execute };
+allow vns_t consoletype_exec_t:file { open read getattr execute execute_no_trans };
+
+# Allow reading and writing temporary files
+allow vns_t tmp_t:dir { open read write add_name remove_name getattr };
+allow vns_t tmp_t:file { open read write append getattr create execute unlink execute_no_trans };
+allow vns_t tmpfs_t:dir { search write };
+
+# Allow reading and writing the log file
+allow vns_t var_log_t:dir { open read search getattr };
+
+# Allow sending email
+allow vns_t net_conf_t:file { read open };
+allow vns_t smtp_port_t:tcp_socket { name_connect };
+
+# Allow opening web pages
+allow vns_t http_port_t:tcp_socket { name_connect };
+
+# Other allows that, judging from the audit log, seem to be necessary
+allow vns_t etc_t:file { getattr ioctl read open };
+allow vns_t etc_t:lnk_file read;
+allow vns_t nscd_var_run_t:dir search;
+allow vns_t proc_t:file { getattr ioctl read open };
+allow vns_t proc_t:dir { getattr ioctl read open };
+allow vns_t vns_t:process { signal };
+allow vns_t locale_t:dir { search };
+allow vns_t locale_t:file { getattr read open };
+
+# Roles allowed to enter the vns_t domain
+role vns_r types vns_t;
+role unconfined_r types vns_t;
+\end{verbatim}
+
+\end{document}
