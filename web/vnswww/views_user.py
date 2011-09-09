@@ -303,7 +303,10 @@ def user_profile(request, up):
 
 def post_login(request):
     """Logs the fact that a user has just logged on."""
-    up = request.user.get_profile()
+    try:
+        up = request.user.get_profile()
+    except AttributeError:
+        return HttpResponseRedirect('/')
     up.last_login = datetime.datetime.now()
     up.save()
     return HttpResponseRedirect('/')
