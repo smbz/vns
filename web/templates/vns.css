@@ -185,3 +185,8 @@ table.vert th {
 #messages .warning {
     background-color: #FF8;
 }
+
+img.logo {
+    margin: 10px;
+    border: 0;
+}
