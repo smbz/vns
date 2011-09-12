@@ -126,7 +126,7 @@ def group_view(request, group, **kwargs):
     # Find the user profiles in this group which the user is allowed to see
     try:
         users = permissions.get_allowed_users(request.user)
-        users = users.filter(user__vns_groups=group)
+        users = users.filter(user__vns_groups=group, retired=False)
     except User.DoesNotExist:
         messages.info(request, "There are no users in group %s which you "
                        "can view." % gn)
