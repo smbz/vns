@@ -331,6 +331,13 @@ def topology_permitted_sip_remove(request, tid, topo, sn):
     return HttpResponseRedirect('/topology%d/' % tid)
 
 def topology_delete(request, tid, topo, **kwargs):
+
+    if request.method != 'POST':
+        return direct_to_template(request, 'vns/confirm.html',
+                                  {'title':'Delete topology %d' % tid,
+                                   'button':'Delete topology %d' % tid,
+                                   'url':'/topology%d/delete/' % tid})
+
     je = db.JournalTopologyDelete()
     je.topology = topo
     je.save()

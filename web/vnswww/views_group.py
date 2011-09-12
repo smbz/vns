@@ -368,6 +368,13 @@ def group_delete(request, group, **kwargs):
     @param group  The group to delete
     @return HttpResponse"""
 
+    # Make sure this is a POST request
+    if request.method != 'POST':
+        return direct_to_template(request, 'vns/confirm.html',
+                                  {'title':'Delete group %s from %s' % (group.name, group.org.name),
+                                   'button':'Delete %s' % group.name,
+                                   'url':'/org/%s/%s/delete' % (group.org.name, group.name)})
+
     # Get all users in the group
     try:
         users = User.objects.filter(vns_groups=group)
@@ -415,6 +422,14 @@ def group_topology_delete(request, group, **kwargs):
     @param request  An HttpRequest
     @param group  The group to delete
     @return HttpResponse"""
+
+    if request.method != 'POST':
+        return direct_to_template(request, 'vns/confirm.html',
+                                  {'title':'Delete topologies for group %s from %s'
+                                   % (group.name, group.org.name),
+                                   'button':'Delete topologies',
+                                   'url':'/org/%s/%s/deletetopo/'
+                                   % (group.org.name, group.name)})
 
     # Get the group, users and topologies
     users = User.objects.filter(vns_groups=group)

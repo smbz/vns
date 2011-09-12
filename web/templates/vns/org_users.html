@@ -26,7 +26,9 @@
             <td>{{ u.user.email }}</td>
 			<td>
             {% if u in deletable_users %}
-            <a href="/user/{{ u.user.username }}/delete/">Delete</a>
+            <form action="/user/{{ u.user.username }}/delete/" method="post">
+                <input type="submit" value="Delete" />
+            </form>
             {% endif %}
 			</td>
             {% endif %}

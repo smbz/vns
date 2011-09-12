@@ -260,6 +260,13 @@ def user_renew_auth_key(request, up):
 
 def user_delete(request, up, **kwargs):
 
+    # Check we're not doing this from a GET request
+    if request.method != 'POST':
+        return direct_to_template(request, 'vns/confirm.html',
+                                  {'title': 'Delete user %s' % up.user.username,
+                                   'button': 'Delete %s' % up.user.username,
+                                   'url': '/user/%s/delete/' % up.user.username})
+
     # Mark the user as retired
     user = up.user
     un = user.username
@@ -278,6 +285,15 @@ def user_delete(request, up, **kwargs):
     return HttpResponseRedirect('/org/%s/' % on)
 
 def user_undelete(request, up, **kwargs):
+    tn = 'vns/user_undelete.html'
+
+    # If this isn't a POST request, then show a confirmation form
+    if request.method != 'POST':
+        return direct_to_template(request, tn,
+                                  {'title':'Undelete user %s' % up.user.username,
+                                   'button':'Undelete %s' % up.user.username, 
+                                   'url':'/user/%s/undelete/' % up.user.username})
+
     user = up.user
     un = user.username
     on = up.org.name

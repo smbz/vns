@@ -390,7 +390,14 @@ def topologytemplate_rtable(request, template):
 
 def topologytemplate_delete(request, template):
     """Delete the topology template and all topologies based on it"""
-    name = tempalte.name()
+
+    if request.method != 'POST':
+        return direct_to_template(request, 'vns/confirm.html',
+                                  {'title':'Delete template %s' % template.name,
+                                   'button':'Delete %s' % template.name,
+                                   'url':'/template%d/delete/' % template.id})
+
+    name = template.name()
     template.delete()
     messages.success(request, "Topology template %s and all topologies based on it have been deleted.")
     return HttpResponseRedirect('/templates')

@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% load custom_filters %}
+
+{% block titlebar %}{{ title }}{% endblock %}
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+    <form action="{{ url }}" method="post">
+        <td colspan="2"><input type="submit" value="{{ button }}" />
+    </form>
+{% endblock %}

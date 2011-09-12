@@ -67,10 +67,12 @@
                 <a href="/topology{{ t.id }}/allow_new_user/">Add permitted user</a><br/>
                 <a href="/topology{{ t.id }}/allow_new_srcip/">Add permitted source IP for traffic</a><br/>
                 {% endif %}
+				<a href="/topology{{ t.id }}/clack/">Open with Clack</a><br/>
                 {% if delete %}
-                <a href="/topology{{ t.id }}/delete/">Delete this topology</a><br/>
+				<form action="/topology{{ t.id }}/delete/" method="post">
+                    <input type="submit" value="Delete this topology" />
+                </form>
                 {% endif %}
-				<a href="/topology{{ t.id }}/clack/">Open with Clack</a>
             </td>
         </tr>
     </table>
