@@ -30,7 +30,6 @@ def raven_return(request):
         return HttpResponseRedirect('/')
 
     # Try to log in with the server's response
-    print("Calling django authenticate")
     user = authenticate(response_str=response)
     if user is not None:
         if not user.get_profile().retired:
