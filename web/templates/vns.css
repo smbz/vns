@@ -73,7 +73,7 @@ table.vert th {
     width: 1020px;
     margin-left: auto;
     margin-right: auto;
-    background-color: #990000;
+    background-color: #002060;
     border: thin solid black;
 }
 #header h1 {
@@ -90,7 +90,7 @@ table.vert th {
     width: 1020px;
     margin-left: auto;
     margin-right: auto;
-    background-color: #990000;
+    background-color: #002060;
 }
 #main a {
     color: #0000BB;
@@ -149,7 +149,7 @@ table.vert th {
     margin-left: auto;
     margin-right: auto;
     display: table;
-    background-color: #990000;
+    background-color: #002060;
     border: thin solid black;
 }
 
