@@ -66,7 +66,7 @@ class TCPConnection():
     """Manages the state of one half of a TCP connection."""
     def __init__(self, syn_seq, my_ip, my_port, other_ip, other_port,
                  connection_over_callback, has_data_to_send_callback,
-                 assumed_rtt=0.5, mtu=1500, max_data=2048, max_wait_time_sec=5):
+                 assumed_rtt=0.5, mtu=1500, max_data=2048, max_wait_time_sec=30):
         # socket pair
         self.my_ip = my_ip
         self.my_port = my_port

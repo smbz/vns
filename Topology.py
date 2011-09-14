@@ -10,6 +10,8 @@ import time
 
 from django.contrib.auth.models import User
 
+from twisted.internet import reactor
+
 from settings import ARP_CACHE_TIMEOUT, MAY_FORWARD_TO_PRIVATE_IPS, WEB_SERVER_ROOT_WWW
 from AddressAllocation import allocate_to_topology
 from DRRQueue import DRRQueue
@@ -256,7 +258,7 @@ class Topology():
 
         # failed to find the specified interface
         fmt = 'bad packet request: invalid interface: %s'
-        return fmt % (n.name, departure_intf_name)
+        return fmt % ((n.name, departure_intf_name),)
 
     def create_job_for_incoming_packet(self, packet, rewrite_dst_mac):
         """Enqueues a job for handling this packet with handle_incoming_packet()."""
@@ -909,6 +911,8 @@ class WebServer(BasicNode):
     def __init__(self, topo, name, path_to_serve):
         BasicNode.__init__(self, topo, name)
         self.http_server = HTTPServer(TCPServer.ANY_PORT, path_to_serve)
+        self.intf = None
+        self.pkt = None
 
     @staticmethod
     def get_type_str():
@@ -917,6 +921,7 @@ class WebServer(BasicNode):
     def handle_non_icmp_ip_packet_to_self(self, intf, pkt):
         """If pkt is to an HTTP_PORT, then the packet is handed off to the HTTP
         server.  Otherwise, the default superclass implementation is called."""
+        reactor.callLater(2, self.send_packets)
         if pkt.is_valid_tcp():
             if is_http_port(pkt.tcp_dst_port):
                 self.handle_http_request(intf, pkt)
@@ -924,17 +929,24 @@ class WebServer(BasicNode):
         BasicNode.handle_non_icmp_ip_packet_to_self(self, intf, pkt)
 
     def handle_http_request(self, intf, pkt):
-        """Forward the received packet from an HTTP client to the web server."""
+        """Forward the rceived packet from an HTTP client to the web server."""
+        self.intf = intf
+        self.pkt = pkt
         tcp_conn = self.http_server.handle_tcp(pkt)
-        if tcp_conn:
-            tcp_pts = tcp_conn.get_packets_to_send()
-            if tcp_pts:
-                for tcp, data in tcp_pts:
-                    eth = pkt.get_reversed_eth()
-                    ip = pkt.get_reversed_ip(new_ttl=64, new_tlen=pkt.ip_hlen+len(tcp)+len(data))
-                    pkt_out = eth + ip + Packet.cksum_tcp_hdr(ip, tcp, data) + data
-                    logging.debug('%s sending packet from HTTP server: %s' % (self, pktstr(pkt_out)))
-                    intf.link.send_to_other(intf, pkt_out)
+        self.send_packets()
+
+    def send_packets(self):
+        """Send any waiting packets"""
+        if self.intf and self.pkt:
+            for (_, tcp_conn) in self.http_server.connections.iteritems():
+                if tcp_conn and not tcp_conn.dead:
+                    tcp_pts = tcp_conn.get_packets_to_send()
+                    for tcp, data in tcp_pts:
+                        eth = self.pkt.get_reversed_eth()
+                        ip = self.pkt.get_reversed_ip(new_ttl=64, new_tlen=self.pkt.ip_hlen+len(tcp)+len(data))
+                        pkt_out = eth + ip + Packet.cksum_tcp_hdr(ip, tcp, data) + data
+                        logging.debug('%s sending packet from HTTP server: %s' % (self, pktstr(pkt_out)))
+                        self.intf.link.send_to_other(self.intf, pkt_out)
 
     def __str__(self):
         ps = ' serving:%s' % self.http_server.get_path_being_served()
