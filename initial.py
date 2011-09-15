@@ -170,7 +170,35 @@ vhost2.eth1 = web1.eth0
 vhost3.eth1 = web2.eth0
 vhost2.eth2 = vhost3.eth2""",
 
-"""PWOSPF template readme""",
+"""This file describes your particular setup for the VNS pwospf assignment.
+
+You have been assigned topology $topo.id which looks like this:
+
+                                  eth0:$vhost2.eth0.ip
+                                  +======================+
+                                  |  router #2         (eth1) ======= App Server 1 ($web1.eth0.ip)
+                                  |  vhost2              | eth1:$vhost2.eth1.ip
+                                  +=====(eth0)=====(eth2)+
+                                          /          ||    eth2:$vhost2.eth2.ip
+                                         /           ||
+                                        /            ||
+                                       /             ||
+                                      /              ||  vhost1:
+  (internet)           +============(eth1)==+        ||    eth0: $vhost1.eth0.ip
+  gateway rtr ======= (eth0)  router #1     |        ||    eth1: $vhost1.eth1.ip
+  $topo.gatewayip         |      vhost1        |        ||    eth2: $vhost1.eth2.ip
+                       +============(eth2)==+        ||
+                                      \              ||
+                                       \             ||
+                                        \            ||
+                                         \           ||
+                                          \          ||    eth2:$vhost3.eth2.ip
+                                  +=====(eth0)=====(eth2)+
+                                  |  router #2           | eth1:$vhost3.eth1.ip
+                                  |  vhost3            (eth1) ======= App Server 2 ($web2.eth0.ip)
+                                  +======================+
+                                  eth0:$vhost3.eth0.ip
+""",
 
 "no routing table")
 
