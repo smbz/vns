@@ -16,7 +16,6 @@ def start():
     """Constructor.  Initialises the queue of jobs to do and starts the DB
     thread."""
     global thread
-    print("Constructing new DBService")
     thread = Thread(name="DBService", target=loop)
     thread.start()
 

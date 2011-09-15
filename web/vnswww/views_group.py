@@ -1,5 +1,6 @@
 import re
 from string import Template
+import threading
 
 from django import forms
 from django.db import IntegrityError
@@ -12,6 +13,7 @@ from vns.AddressAllocation import instantiate_template
 
 import models as db
 import permissions
+from vns import DBService
 
 def group_access_check(request, callee, action, **kwargs):
     """Checks that the user can access the functions they're trying to, and
@@ -293,7 +295,7 @@ def make_group_add_form(user):
         group_name = forms.CharField(label='Group name', max_length=30)
         pos        = forms.ChoiceField(label='Position', choices=pos_choices)
         login      = forms.ChoiceField(label='Password allocation',
-                                       choices=((0, 'External login only'),
+                                       choices=((0, 'Raven login only'),
                                                 (1, 'Email random password')),
                                        widget=forms.widgets.RadioSelect)
         users      = forms.CharField(label='Users, e.g. fs123,fs123@example.com,Fred,Smith',
@@ -474,32 +476,37 @@ def make_ctform(user):
                                       min_value=0, max_value=32)
 
         def clean_ip_subnet_mask(self):
+
+            # Test if the user provided a subnet mask
+            has_subnet_mask = True
             try:
                 ip_subnet_mask = self.cleaned_data['ip_subnet_mask']
             except KeyError:
-                # The subnet shouldn't be provided either
-                try:
-                    ip_subnet = self.cleaned_data['ip_subnet']
-                except KeyError:
-                    return None
-                else:
-                    raise ValidationError("You must provide a subnet mask if "
-                                          "you specify a subnet")
-            
+                has_subnet_mask = False
+            if ip_subnet_mask == None:
+                has_subnet_mask = False
+
+            # Test if they provided a subnet
+            has_subnet = True
             try:
                 ip_subnet = self.cleaned_data['ip_subnet']
             except KeyError:
-                # We've provided a subnet mask but not a subnet
-                raise ValidationError("You must provide a subnet if you "
-                                      "specify a subnet mask")
+                has_subnet = False
+            if ip_subnet == '':
+                has_subnet = False
+            
+            # Check that either subnet and mask or provded, or neither
+            if has_subnet != has_subnet_mask:
+                raise forms.ValidationError("You must provide both a subnet "
+                                            "and a mask, or neither.")
 
-            # Otherwise, we have both; check that the subnet mask is a suitable
-            # size
-            if ip_subnet_mask < 0 or ip_subnet_mask > 32:
-                raise ValidationError("The subnet mask must be between 0 and "
-                                      "32 inclusive")
+            # If we have a mask, make sure it has a correct value
+            if has_subnet_mask:
+                if ip_subnet_mask < 0 or ip_subnet_mask > 32:
+                    raise forms.ValidationError("The subnet mask must be between 0 and "
+                                                "32 inclusive")
 
-            return ip_subnet_mask
+            return ip_subnet_mask if has_subnet_mask else None
 
     return CTForm
 
@@ -565,6 +572,9 @@ def group_topology_create(request, group, **kwargs):
                 messages.error("No users in this group to create topologies for")
                 return HttpResponseRedirect("/")
 
+            # Tell the DBService module to use this thread for accessing the DB
+            DBService.thread = threading.current_thread()
+
             # Otherwise, we're good to actually create the topologies, subject
             # to permissions checks on each user.
             # These variables track the number with permissions errors, the
@@ -587,13 +597,17 @@ def group_topology_create(request, group, **kwargs):
                     src_filters = []
 
                 # Create the topology
-                for _ in range(0,num_to_create):
+                for _ in xrange(0,num_to_create):
+
                     err,_,_,_ = instantiate_template(org=u.get_profile().org,
                                                      owner=u,
                                                      template=template,
                                                      ip_block_from=ipblock,
                                                      src_filters=src_filters,
-                                                     temporary=False)
+                                                     temporary=False,
+                                                     use_recent_alloc_logic=False,
+                                                     public=False,
+                                                     use_first_available=True)
                 
                     # Update the numbers with/without errors
                     if err is not None:

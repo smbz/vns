@@ -162,7 +162,7 @@ def instantiate_template(org, owner, template, ip_block_from, src_filters, tempo
         tsif.topology = t
         tsif.ip = sf_ip
         tsif.mask = sf_mask
-        db.run_in_db_thread(tsif.save)
+        DBService.run_and_wait(tsif.save)
         logging.info('IP source filter for new topology %d: %s' % (t.id, tsif))
 
     return (None, t, None, None)

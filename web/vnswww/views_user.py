@@ -115,7 +115,7 @@ def make_registration_form(user):
             login = self.cleaned_data['pw_method']
             pw = self.cleaned_data['pw']
             if login == 'given' and len(pw) < 6:
-                raise ValidationError("Password must be at least 6 characters")
+                raise forms.ValidationError("Password must be at least 6 characters")
             return self.cleaned_data
 
     return RegistrationForm
